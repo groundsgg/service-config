@@ -21,7 +21,7 @@ class ConfigVersionRepository @Inject constructor(private val dataSource: DataSo
             }
         } catch (error: SQLException) {
             LOG.errorf(error, "Failed to get config version (app=%s, env=%s)", app, env)
-            0L
+            throw error
         }
     }
 
@@ -32,13 +32,19 @@ class ConfigVersionRepository @Inject constructor(private val dataSource: DataSo
                     statement.setString(1, app)
                     statement.setString(2, env)
                     statement.executeQuery().use { resultSet ->
-                        if (resultSet.next()) resultSet.getLong("version") else 0L
+                        if (resultSet.next()) {
+                            resultSet.getLong("version")
+                        } else {
+                            throw SQLException(
+                                "Failed to increment config version (reason=missing_version_row, app=$app, env=$env)"
+                            )
+                        }
                     }
                 }
             }
         } catch (error: SQLException) {
             LOG.errorf(error, "Failed to increment config version (app=%s, env=%s)", app, env)
-            0L
+            throw error
         }
     }
 

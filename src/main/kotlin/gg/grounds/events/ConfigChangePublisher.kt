@@ -19,9 +19,20 @@ constructor(
 ) {
     private var connection: Connection? = null
 
+    @Synchronized
     fun connect() {
-        if (connection != null) {
-            return
+        val existingConnection = connection
+        if (existingConnection != null) {
+            if (existingConnection.status == Connection.Status.CONNECTED) {
+                return
+            }
+            try {
+                existingConnection.close()
+            } catch (error: Exception) {
+                LOG.warnf(error, "Failed to close stale NATS connection (url=%s)", natsUrl)
+            } finally {
+                connection = null
+            }
         }
         try {
             val options = Options.Builder().server(natsUrl).build()
@@ -29,6 +40,7 @@ constructor(
             LOG.infof("Connected to NATS (url=%s)", natsUrl)
         } catch (error: Exception) {
             LOG.errorf(error, "Failed to connect to NATS (url=%s)", natsUrl)
+            connection = null
         }
     }
 
@@ -39,10 +51,10 @@ constructor(
         namespace: String? = null,
         configKey: String? = null,
     ) {
-        val conn = connection
+        val conn = connectedConnection()
         if (conn == null || conn.status != Connection.Status.CONNECTED) {
             LOG.warnf(
-                "NATS not connected, skipping publish (app=%s, env=%s, version=%d)",
+                "Skipped config change publish (reason=nats_not_connected, app=%s, env=%s, version=%d)",
                 app,
                 env,
                 version,
@@ -57,6 +69,15 @@ constructor(
         } catch (error: Exception) {
             LOG.errorf(error, "Failed to publish config change (subject=%s)", subject)
         }
+    }
+
+    private fun connectedConnection(): Connection? {
+        val currentConnection = connection
+        if (currentConnection != null && currentConnection.status == Connection.Status.CONNECTED) {
+            return currentConnection
+        }
+        connect()
+        return connection
     }
 
     fun close() {
