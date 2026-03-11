@@ -20,7 +20,12 @@ class ConfigVersionRepository @Inject constructor(private val dataSource: DataSo
                 }
             }
         } catch (error: SQLException) {
-            LOG.errorf(error, "Failed to get config version (app=%s, env=%s)", app, env)
+            LOG.errorf(
+                "Failed to get config version (app=%s, env=%s, reason=%s)",
+                app,
+                env,
+                errorReason(error),
+            )
             throw error
         }
     }
@@ -43,9 +48,18 @@ class ConfigVersionRepository @Inject constructor(private val dataSource: DataSo
                 }
             }
         } catch (error: SQLException) {
-            LOG.errorf(error, "Failed to increment config version (app=%s, env=%s)", app, env)
+            LOG.errorf(
+                "Failed to increment config version (app=%s, env=%s, reason=%s)",
+                app,
+                env,
+                errorReason(error),
+            )
             throw error
         }
+    }
+
+    private fun errorReason(error: SQLException): String {
+        return error.message ?: error::class.java.simpleName
     }
 
     companion object {

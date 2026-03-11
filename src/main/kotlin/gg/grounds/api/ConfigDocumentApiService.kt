@@ -1,6 +1,7 @@
 package gg.grounds.api
 
 import gg.grounds.domain.ConfigDocument
+import gg.grounds.events.ConfigChangePublisher
 import gg.grounds.grpc.config.GetDocumentRequest
 import gg.grounds.grpc.config.GetNamespaceSnapshotRequest
 import gg.grounds.grpc.config.GetSnapshotIfNewerRequest
@@ -20,6 +21,7 @@ class ConfigDocumentApiService
 constructor(
     private val documentRepository: ConfigDocumentRepository,
     private val versionRepository: ConfigVersionRepository,
+    private val changePublisher: ConfigChangePublisher,
 ) {
     fun getSnapshot(request: GetSnapshotRequest): GetSnapshotResponse {
         val context = ConfigRequestContexts.toAppEnvContext(request.app, request.env)
@@ -90,6 +92,9 @@ constructor(
             } else {
                 versionRepository.getVersion(context.app, context.env)
             }
+        if (createdKeys.isNotEmpty()) {
+            changePublisher.publishChange(context.app, context.env, version)
+        }
         return SyncDefaultsResponse.newBuilder()
             .setVersion(version)
             .addAllCreatedKeys(createdKeys)

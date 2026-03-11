@@ -25,12 +25,12 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
             }
         } catch (error: SQLException) {
             LOG.errorf(
-                error,
-                "Failed to upsert config document (app=%s, env=%s, namespace=%s, configKey=%s)",
+                "Failed to upsert config document (app=%s, env=%s, namespace=%s, configKey=%s, reason=%s)",
                 document.app,
                 document.env,
                 document.namespace,
                 document.configKey,
+                errorReason(error),
             )
             false
         }
@@ -140,11 +140,11 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
             }
         } catch (error: SQLException) {
             LOG.errorf(
-                error,
-                "Failed to insert default configs (app=%s, env=%s, count=%d)",
+                "Failed to insert default configs (app=%s, env=%s, count=%d, reason=%s)",
                 app,
                 env,
                 defaults.size,
+                errorReason(error),
             )
             throw error
         }
@@ -163,12 +163,12 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
             }
         } catch (error: SQLException) {
             LOG.errorf(
-                error,
-                "Failed to delete config document (app=%s, env=%s, namespace=%s, configKey=%s)",
+                "Failed to delete config document (app=%s, env=%s, namespace=%s, configKey=%s, reason=%s)",
                 app,
                 env,
                 namespace,
                 configKey,
+                errorReason(error),
             )
             false
         }
@@ -235,6 +235,10 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
         } catch (rollbackError: SQLException) {
             originalError.addSuppressed(rollbackError)
         }
+    }
+
+    private fun errorReason(error: SQLException): String {
+        return error.message ?: error::class.java.simpleName
     }
 
     companion object {

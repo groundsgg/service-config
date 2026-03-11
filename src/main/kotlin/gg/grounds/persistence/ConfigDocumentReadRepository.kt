@@ -26,7 +26,12 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
                 }
             }
         } catch (error: SQLException) {
-            LOG.errorf(error, "Failed to list config documents (app=%s, env=%s)", app, env)
+            LOG.errorf(
+                "Failed to list config documents (app=%s, env=%s, reason=%s)",
+                app,
+                env,
+                errorReason(error),
+            )
             throw error
         }
     }
@@ -49,11 +54,11 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
             }
         } catch (error: SQLException) {
             LOG.errorf(
-                error,
-                "Failed to list config documents (app=%s, env=%s, namespace=%s)",
+                "Failed to list config documents (app=%s, env=%s, namespace=%s, reason=%s)",
                 app,
                 env,
                 namespace,
+                errorReason(error),
             )
             throw error
         }
@@ -74,15 +79,19 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
             }
         } catch (error: SQLException) {
             LOG.errorf(
-                error,
-                "Failed to fetch config document (app=%s, env=%s, namespace=%s, configKey=%s)",
+                "Failed to fetch config document (app=%s, env=%s, namespace=%s, configKey=%s, reason=%s)",
                 app,
                 env,
                 namespace,
                 configKey,
+                errorReason(error),
             )
             throw error
         }
+    }
+
+    private fun errorReason(error: SQLException): String {
+        return error.message ?: error::class.java.simpleName
     }
 
     private fun mapDocument(resultSet: ResultSet): ConfigDocument {
