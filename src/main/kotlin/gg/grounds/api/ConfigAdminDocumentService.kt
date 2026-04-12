@@ -1,5 +1,6 @@
 package gg.grounds.api
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import gg.grounds.domain.ConfigDocument
 import gg.grounds.events.ConfigChangePublisher
 import gg.grounds.grpc.config.DeleteDocumentRequest
@@ -21,10 +22,16 @@ class ConfigAdminDocumentService
 constructor(
     private val documentRepository: ConfigDocumentRepository,
     private val changePublisher: ConfigChangePublisher,
+    private val objectMapper: ObjectMapper,
 ) {
     fun listDocuments(request: ListDocumentsRequest): ListDocumentsResponse {
         val context =
-            ConfigRequestContexts.toNamespaceContext(request.app, request.env, request.namespace)
+            ConfigRequestContexts.toNamespaceContext(
+                request.app,
+                request.env,
+                request.namespace,
+                allowEmptyNamespace = true,
+            )
         val documents =
             if (context.namespace.isNotEmpty()) {
                 documentRepository.findByNamespace(context.app, context.env, context.namespace)
@@ -55,6 +62,7 @@ constructor(
                 request.namespace,
                 request.configKey,
             )
+        validateJsonContent(request.contentJson)
         val updatedBy = request.updatedBy.trim().ifEmpty { null }
         val document =
             ConfigDocument(
@@ -111,46 +119,25 @@ constructor(
                 request.namespace,
                 request.configKey,
             )
-        return when (
-            val result =
-                documentRepository.deleteAndIncrementVersion(
-                    context.app,
-                    context.env,
-                    context.namespace,
-                    context.configKey,
-                )
-        ) {
-            is ConfigDocumentRepository.DeleteAndIncrementVersionResult.Deleted -> {
-                changePublisher.publishChange(
-                    context.app,
-                    context.env,
-                    result.version,
-                    context.namespace,
-                    context.configKey,
-                )
-                LOG.infof(
-                    "Config document deleted successfully (app=%s, env=%s, namespace=%s, configKey=%s, version=%d)",
-                    context.app,
-                    context.env,
-                    context.namespace,
-                    context.configKey,
-                    result.version,
-                )
-                DeleteDocumentResponse.newBuilder().setDeleted(true).build()
-            }
-            ConfigDocumentRepository.DeleteAndIncrementVersionResult.NotFound ->
-                DeleteDocumentResponse.newBuilder().setDeleted(false).build()
-            is ConfigDocumentRepository.DeleteAndIncrementVersionResult.Failed -> {
-                LOG.errorf(
-                    result.cause,
-                    "Failed to delete config document (app=%s, env=%s, namespace=%s, configKey=%s)",
-                    context.app,
-                    context.env,
-                    context.namespace,
-                    context.configKey,
-                )
-                DeleteDocumentResponse.newBuilder().setDeleted(false).build()
-            }
+        LOG.warnf(
+            "Config document delete rejected (app=%s, env=%s, namespace=%s, configKey=%s, reason=delete_not_supported)",
+            context.app,
+            context.env,
+            context.namespace,
+            context.configKey,
+        )
+        throw Status.FAILED_PRECONDITION.withDescription(
+                "DeleteDocument is not supported because config documents are the persisted runtime truth; use PutDocument to replace the value"
+            )
+            .asRuntimeException()
+    }
+
+    private fun validateJsonContent(contentJson: String) {
+        try {
+            objectMapper.readTree(contentJson)
+        } catch (_: Exception) {
+            throw Status.INVALID_ARGUMENT.withDescription("contentJson must be valid JSON")
+                .asRuntimeException()
         }
     }
 

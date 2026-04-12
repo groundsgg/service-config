@@ -150,6 +150,69 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
         }
     }
 
+    fun syncDefaults(
+        app: String,
+        env: String,
+        defaults: List<ConfigDocumentRepository.DefaultConfig>,
+    ): ConfigDocumentRepository.SyncDefaultsResult {
+        if (defaults.isEmpty()) {
+            return ConfigDocumentRepository.SyncDefaultsResult(emptyList(), getVersion(app, env))
+        }
+        return try {
+            dataSource.connection.use { connection ->
+                val originalAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    val createdDefaults =
+                        connection.prepareStatement(INSERT_IF_NOT_EXISTS).use { statement ->
+                            val insertedDefaults =
+                                mutableListOf<ConfigDocumentRepository.DefaultConfig>()
+                            for (defaultConfig in defaults) {
+                                try {
+                                    statement.setString(1, app)
+                                    statement.setString(2, env)
+                                    statement.setString(3, defaultConfig.namespace)
+                                    statement.setString(4, defaultConfig.configKey)
+                                    statement.setString(5, defaultConfig.defaultContentJson)
+                                    if (statement.executeUpdate() > 0) {
+                                        insertedDefaults.add(defaultConfig)
+                                    }
+                                } catch (error: SQLException) {
+                                    throw SQLException(
+                                        "Failed to insert default config (app=$app, env=$env, namespace=${defaultConfig.namespace}, configKey=${defaultConfig.configKey})",
+                                        error,
+                                    )
+                                }
+                            }
+                            insertedDefaults
+                        }
+                    val version =
+                        if (createdDefaults.isNotEmpty()) {
+                            incrementVersion(connection, app, env)
+                        } else {
+                            getVersion(connection, app, env)
+                        }
+                    connection.commit()
+                    ConfigDocumentRepository.SyncDefaultsResult(createdDefaults, version)
+                } catch (error: SQLException) {
+                    rollbackSafely(connection, error)
+                    throw error
+                } finally {
+                    connection.autoCommit = originalAutoCommit
+                }
+            }
+        } catch (error: SQLException) {
+            LOG.errorf(
+                "Failed to sync default configs (app=%s, env=%s, count=%d, reason=%s)",
+                app,
+                env,
+                defaults.size,
+                errorReason(error),
+            )
+            throw error
+        }
+    }
+
     fun delete(app: String, env: String, namespace: String, configKey: String): Boolean {
         return try {
             dataSource.connection.use { connection ->
@@ -229,6 +292,20 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
         }
     }
 
+    private fun getVersion(app: String, env: String): Long {
+        return dataSource.connection.use { connection -> getVersion(connection, app, env) }
+    }
+
+    private fun getVersion(connection: Connection, app: String, env: String): Long {
+        return connection.prepareStatement(SELECT_VERSION).use { statement ->
+            statement.setString(1, app)
+            statement.setString(2, env)
+            statement.executeQuery().use { resultSet ->
+                if (resultSet.next()) resultSet.getLong("version") else 0L
+            }
+        }
+    }
+
     private fun rollbackSafely(connection: Connection, originalError: SQLException) {
         try {
             connection.rollback()
@@ -275,6 +352,13 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
             DO UPDATE SET version = config_app_versions.version + 1,
                           updated_at = now()
             RETURNING version
+            """
+
+        private const val SELECT_VERSION =
+            """
+            SELECT version
+            FROM config_app_versions
+            WHERE app = ? AND env = ?
             """
     }
 }

@@ -3,6 +3,7 @@ package gg.grounds.persistence
 import gg.grounds.domain.ConfigDocument
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.inject.Inject
+import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.SQLException
 import javax.sql.DataSource
@@ -12,19 +13,7 @@ import org.jboss.logging.Logger
 class ConfigDocumentReadRepository @Inject constructor(private val dataSource: DataSource) {
     fun findAll(app: String, env: String): List<ConfigDocument> {
         return try {
-            dataSource.connection.use { connection ->
-                connection.prepareStatement(SELECT_ALL).use { statement ->
-                    statement.setString(1, app)
-                    statement.setString(2, env)
-                    statement.executeQuery().use { resultSet ->
-                        val documents = mutableListOf<ConfigDocument>()
-                        while (resultSet.next()) {
-                            documents.add(mapDocument(resultSet))
-                        }
-                        documents
-                    }
-                }
-            }
+            dataSource.connection.use { connection -> findAll(connection, app, env) }
         } catch (error: SQLException) {
             LOG.errorf(
                 "Failed to list config documents (app=%s, env=%s, reason=%s)",
@@ -36,21 +25,18 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
         }
     }
 
+    internal fun findAll(connection: Connection, app: String, env: String): List<ConfigDocument> {
+        return connection.prepareStatement(SELECT_ALL).use { statement ->
+            statement.setString(1, app)
+            statement.setString(2, env)
+            statement.executeQuery().use { resultSet -> readDocuments(resultSet) }
+        }
+    }
+
     fun findByNamespace(app: String, env: String, namespace: String): List<ConfigDocument> {
         return try {
             dataSource.connection.use { connection ->
-                connection.prepareStatement(SELECT_BY_NAMESPACE).use { statement ->
-                    statement.setString(1, app)
-                    statement.setString(2, env)
-                    statement.setString(3, namespace)
-                    statement.executeQuery().use { resultSet ->
-                        val documents = mutableListOf<ConfigDocument>()
-                        while (resultSet.next()) {
-                            documents.add(mapDocument(resultSet))
-                        }
-                        documents
-                    }
-                }
+                findByNamespace(connection, app, env, namespace)
             }
         } catch (error: SQLException) {
             LOG.errorf(
@@ -61,6 +47,20 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
                 errorReason(error),
             )
             throw error
+        }
+    }
+
+    internal fun findByNamespace(
+        connection: Connection,
+        app: String,
+        env: String,
+        namespace: String,
+    ): List<ConfigDocument> {
+        return connection.prepareStatement(SELECT_BY_NAMESPACE).use { statement ->
+            statement.setString(1, app)
+            statement.setString(2, env)
+            statement.setString(3, namespace)
+            statement.executeQuery().use { resultSet -> readDocuments(resultSet) }
         }
     }
 
@@ -88,6 +88,14 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
             )
             throw error
         }
+    }
+
+    private fun readDocuments(resultSet: ResultSet): List<ConfigDocument> {
+        val documents = mutableListOf<ConfigDocument>()
+        while (resultSet.next()) {
+            documents.add(mapDocument(resultSet))
+        }
+        return documents
     }
 
     private fun errorReason(error: SQLException): String {

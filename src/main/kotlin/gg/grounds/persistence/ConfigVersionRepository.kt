@@ -2,6 +2,7 @@ package gg.grounds.persistence
 
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.inject.Inject
+import java.sql.Connection
 import java.sql.SQLException
 import javax.sql.DataSource
 import org.jboss.logging.Logger
@@ -10,15 +11,7 @@ import org.jboss.logging.Logger
 class ConfigVersionRepository @Inject constructor(private val dataSource: DataSource) {
     fun getVersion(app: String, env: String): Long {
         return try {
-            dataSource.connection.use { connection ->
-                connection.prepareStatement(SELECT_VERSION).use { statement ->
-                    statement.setString(1, app)
-                    statement.setString(2, env)
-                    statement.executeQuery().use { resultSet ->
-                        if (resultSet.next()) resultSet.getLong("version") else 0L
-                    }
-                }
-            }
+            dataSource.connection.use { connection -> getVersion(connection, app, env) }
         } catch (error: SQLException) {
             LOG.errorf(
                 "Failed to get config version (app=%s, env=%s, reason=%s)",
@@ -27,6 +20,16 @@ class ConfigVersionRepository @Inject constructor(private val dataSource: DataSo
                 errorReason(error),
             )
             throw error
+        }
+    }
+
+    internal fun getVersion(connection: Connection, app: String, env: String): Long {
+        return connection.prepareStatement(SELECT_VERSION).use { statement ->
+            statement.setString(1, app)
+            statement.setString(2, env)
+            statement.executeQuery().use { resultSet ->
+                if (resultSet.next()) resultSet.getLong("version") else 0L
+            }
         }
     }
 
