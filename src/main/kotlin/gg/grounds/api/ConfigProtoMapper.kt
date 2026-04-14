@@ -9,6 +9,7 @@ object ConfigProtoMapper {
             .setNamespace(document.namespace)
             .setConfigKey(document.configKey)
             .setContentJson(document.contentJson)
+            .setVersion(document.version)
             .build()
     }
 

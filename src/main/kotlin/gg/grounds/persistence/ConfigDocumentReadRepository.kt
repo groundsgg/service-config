@@ -110,6 +110,7 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
             namespace = resultSet.getString("namespace"),
             configKey = resultSet.getString("config_key"),
             contentJson = resultSet.getString("content"),
+            version = resultSet.getLong("version"),
             createdAt = resultSet.getTimestamp("created_at").toInstant(),
             updatedAt = resultSet.getTimestamp("updated_at").toInstant(),
             updatedBy = resultSet.getString("updated_by"),
@@ -121,7 +122,7 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
 
         private const val SELECT_ALL =
             """
-            SELECT id, app, env, namespace, config_key, content, created_at, updated_at, updated_by
+            SELECT id, app, env, namespace, config_key, content, version, created_at, updated_at, updated_by
             FROM config_documents
             WHERE app = ? AND env = ?
             ORDER BY namespace, config_key
@@ -129,7 +130,7 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
 
         private const val SELECT_BY_NAMESPACE =
             """
-            SELECT id, app, env, namespace, config_key, content, created_at, updated_at, updated_by
+            SELECT id, app, env, namespace, config_key, content, version, created_at, updated_at, updated_by
             FROM config_documents
             WHERE app = ? AND env = ? AND namespace = ?
             ORDER BY config_key
@@ -137,7 +138,7 @@ class ConfigDocumentReadRepository @Inject constructor(private val dataSource: D
 
         private const val SELECT_ONE =
             """
-            SELECT id, app, env, namespace, config_key, content, created_at, updated_at, updated_by
+            SELECT id, app, env, namespace, config_key, content, version, created_at, updated_at, updated_by
             FROM config_documents
             WHERE app = ? AND env = ? AND namespace = ? AND config_key = ?
             """

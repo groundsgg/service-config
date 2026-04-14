@@ -24,7 +24,7 @@ dependencies {
     implementation("io.quarkus:quarkus-flyway")
     implementation("io.quarkus:quarkus-kotlin")
     implementation("io.quarkus:quarkus-smallrye-health")
-    implementation("gg.grounds:library-grpc-contracts-config:feat-config-SNAPSHOT")
+    implementation("gg.grounds:library-grpc-contracts-config:0.1.0")
     implementation("io.nats:jnats:2.25.2")
 
     compileOnly("com.google.protobuf:protobuf-kotlin")

@@ -73,10 +73,19 @@ constructor(
                 contentJson = request.contentJson,
                 updatedBy = updatedBy,
             )
+        val expectedVersion = if (request.hasExpectedVersion()) request.expectedVersion else null
         val version =
-            when (val result = documentRepository.upsertAndIncrementVersion(document)) {
+            when (
+                val result = documentRepository.upsertAndIncrementVersion(document, expectedVersion)
+            ) {
                 is ConfigDocumentRepository.UpsertAndIncrementVersionResult.Updated ->
                     result.version
+                is ConfigDocumentRepository.UpsertAndIncrementVersionResult.PreconditionFailed -> {
+                    throw Status.FAILED_PRECONDITION.withDescription(
+                            "Config document version mismatch (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, expectedVersion=$expectedVersion, currentVersion=${result.currentDocumentVersion})"
+                        )
+                        .asRuntimeException()
+                }
                 is ConfigDocumentRepository.UpsertAndIncrementVersionResult.Failed -> {
                     LOG.errorf(
                         result.cause,
@@ -119,17 +128,68 @@ constructor(
                 request.namespace,
                 request.configKey,
             )
-        LOG.warnf(
-            "Config document delete rejected (app=%s, env=%s, namespace=%s, configKey=%s, reason=delete_not_supported)",
-            context.app,
-            context.env,
-            context.namespace,
-            context.configKey,
-        )
-        throw Status.FAILED_PRECONDITION.withDescription(
-                "DeleteDocument is not supported because config documents are the persisted runtime truth; use PutDocument to replace the value"
-            )
-            .asRuntimeException()
+        val deletedBy = request.deletedBy.trim().ifEmpty { null }
+        return when (
+            val result =
+                documentRepository.deleteAndIncrementVersion(
+                    context.app,
+                    context.env,
+                    context.namespace,
+                    context.configKey,
+                )
+        ) {
+            is ConfigDocumentRepository.DeleteAndIncrementVersionResult.Deleted -> {
+                changePublisher.publishChange(
+                    context.app,
+                    context.env,
+                    result.version,
+                    context.namespace,
+                    context.configKey,
+                )
+                LOG.infof(
+                    "Config document deleted successfully (app=%s, env=%s, namespace=%s, configKey=%s, version=%d, deletedBy=%s)",
+                    context.app,
+                    context.env,
+                    context.namespace,
+                    context.configKey,
+                    result.version,
+                    deletedBy,
+                )
+                DeleteDocumentResponse.newBuilder()
+                    .setDeleted(true)
+                    .setVersion(result.version)
+                    .build()
+            }
+            is ConfigDocumentRepository.DeleteAndIncrementVersionResult.NotFound -> {
+                LOG.infof(
+                    "Config document delete skipped (app=%s, env=%s, namespace=%s, configKey=%s, version=%d, deletedBy=%s, reason=document_not_found)",
+                    context.app,
+                    context.env,
+                    context.namespace,
+                    context.configKey,
+                    result.version,
+                    deletedBy,
+                )
+                DeleteDocumentResponse.newBuilder()
+                    .setDeleted(false)
+                    .setVersion(result.version)
+                    .build()
+            }
+            is ConfigDocumentRepository.DeleteAndIncrementVersionResult.Failed -> {
+                LOG.errorf(
+                    result.cause,
+                    "Failed to delete config document (app=%s, env=%s, namespace=%s, configKey=%s)",
+                    context.app,
+                    context.env,
+                    context.namespace,
+                    context.configKey,
+                )
+                throw Status.INTERNAL.withDescription(
+                        "Failed to delete config document (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})"
+                    )
+                    .asRuntimeException()
+            }
+        }
     }
 
     private fun validateJsonContent(contentJson: String) {

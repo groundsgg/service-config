@@ -9,6 +9,7 @@ data class ConfigDocument(
     val namespace: String,
     val configKey: String,
     val contentJson: String,
+    val version: Long = 1,
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = Instant.now(),
     val updatedBy: String? = null,

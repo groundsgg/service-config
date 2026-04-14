@@ -87,6 +87,7 @@ class ConfigDocumentRepositoryTest {
         whenever(documentResultSet.getString("namespace")).thenReturn("feature-flags")
         whenever(documentResultSet.getString("config_key")).thenReturn("new-ui")
         whenever(documentResultSet.getString("content")).thenReturn("""{"enabled":true}""")
+        whenever(documentResultSet.getLong("version")).thenReturn(3L)
         whenever(documentResultSet.getTimestamp("created_at"))
             .thenReturn(Timestamp.from(Instant.parse("2026-04-11T10:15:30Z")))
         whenever(documentResultSet.getTimestamp("updated_at"))
@@ -99,6 +100,7 @@ class ConfigDocumentRepositoryTest {
         assertEquals(1, snapshot.documents.size)
         assertEquals("feature-flags", snapshot.documents.single().namespace)
         assertEquals("new-ui", snapshot.documents.single().configKey)
+        assertEquals(3L, snapshot.documents.single().version)
         verify(snapshotConnection).setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
         verify(snapshotConnection).setReadOnly(true)
         verify(snapshotConnection).setAutoCommit(false)
@@ -191,6 +193,42 @@ class ConfigDocumentRepositoryTest {
         assertEquals(
             sqlError,
             (result as ConfigDocumentRepository.UpsertAndIncrementVersionResult.Failed).cause,
+        )
+        verify(transactionConnection).rollback()
+        verify(transactionConnection, never()).commit()
+    }
+
+    @Test
+    fun `upsertAndIncrementVersion returns precondition failed when expected version does not match`() {
+        val transactionDataSource: DataSource = mock()
+        val transactionConnection: Connection = mock()
+        val updateStatement: PreparedStatement = mock()
+        val currentVersionStatement: PreparedStatement = mock()
+        val currentVersionResultSet: ResultSet = mock()
+        val transactionRepository = ConfigDocumentRepository(transactionDataSource)
+        val document =
+            ConfigDocument(
+                app = "player",
+                env = "prod",
+                namespace = "feature-flags",
+                configKey = "new-ui",
+                contentJson = "{}",
+                updatedBy = "tester",
+            )
+        whenever(transactionDataSource.connection).thenReturn(transactionConnection)
+        whenever(transactionConnection.autoCommit).thenReturn(true)
+        whenever(transactionConnection.prepareStatement(any()))
+            .thenReturn(updateStatement, currentVersionStatement)
+        whenever(updateStatement.executeUpdate()).thenReturn(0)
+        whenever(currentVersionStatement.executeQuery()).thenReturn(currentVersionResultSet)
+        whenever(currentVersionResultSet.next()).thenReturn(true)
+        whenever(currentVersionResultSet.getLong("version")).thenReturn(4L)
+
+        val result = transactionRepository.upsertAndIncrementVersion(document, 3L)
+
+        assertEquals(
+            ConfigDocumentRepository.UpsertAndIncrementVersionResult.PreconditionFailed(4L),
+            result,
         )
         verify(transactionConnection).rollback()
         verify(transactionConnection, never()).commit()
@@ -327,5 +365,35 @@ class ConfigDocumentRepositoryTest {
         assertEquals(sqlError, thrown)
         verify(batchConnection).rollback()
         verify(batchConnection, never()).commit()
+    }
+
+    @Test
+    fun `deleteAndIncrementVersion returns not found with current version when document is missing`() {
+        val transactionDataSource: DataSource = mock()
+        val transactionConnection: Connection = mock()
+        val deleteStatement: PreparedStatement = mock()
+        val versionStatement: PreparedStatement = mock()
+        val versionResultSet: ResultSet = mock()
+        val transactionRepository = ConfigDocumentRepository(transactionDataSource)
+        whenever(transactionDataSource.connection).thenReturn(transactionConnection)
+        whenever(transactionConnection.autoCommit).thenReturn(true)
+        whenever(transactionConnection.prepareStatement(any()))
+            .thenReturn(deleteStatement, versionStatement)
+        whenever(deleteStatement.executeUpdate()).thenReturn(0)
+        whenever(versionStatement.executeQuery()).thenReturn(versionResultSet)
+        whenever(versionResultSet.next()).thenReturn(true)
+        whenever(versionResultSet.getLong("version")).thenReturn(11L)
+
+        val result =
+            transactionRepository.deleteAndIncrementVersion(
+                "player",
+                "prod",
+                "feature-flags",
+                "new-ui",
+            )
+
+        assertEquals(ConfigDocumentRepository.DeleteAndIncrementVersionResult.NotFound(11L), result)
+        verify(transactionConnection).rollback()
+        verify(transactionConnection, never()).commit()
     }
 }

@@ -38,13 +38,16 @@ constructor(
     sealed interface UpsertAndIncrementVersionResult {
         data class Updated(val version: Long) : UpsertAndIncrementVersionResult
 
+        data class PreconditionFailed(val currentDocumentVersion: Long?) :
+            UpsertAndIncrementVersionResult
+
         data class Failed(val cause: SQLException) : UpsertAndIncrementVersionResult
     }
 
     sealed interface DeleteAndIncrementVersionResult {
         data class Deleted(val version: Long) : DeleteAndIncrementVersionResult
 
-        data object NotFound : DeleteAndIncrementVersionResult
+        data class NotFound(val version: Long) : DeleteAndIncrementVersionResult
 
         data class Failed(val cause: SQLException) : DeleteAndIncrementVersionResult
     }
@@ -86,10 +89,15 @@ constructor(
     fun findOne(app: String, env: String, namespace: String, configKey: String): ConfigDocument? =
         readRepository.findOne(app, env, namespace, configKey)
 
+    fun getVersion(app: String, env: String): Long = versionRepository.getVersion(app, env)
+
     fun upsert(document: ConfigDocument): Boolean = writeRepository.upsert(document)
 
-    fun upsertAndIncrementVersion(document: ConfigDocument): UpsertAndIncrementVersionResult =
-        writeRepository.upsertAndIncrementVersion(document)
+    fun upsertAndIncrementVersion(
+        document: ConfigDocument,
+        expectedVersion: Long? = null,
+    ): UpsertAndIncrementVersionResult =
+        writeRepository.upsertAndIncrementVersion(document, expectedVersion)
 
     fun insertIfNotExists(
         app: String,

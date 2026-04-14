@@ -37,30 +37,35 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
     }
 
     fun upsertAndIncrementVersion(
-        document: ConfigDocument
+        document: ConfigDocument,
+        expectedVersion: Long? = null,
     ): ConfigDocumentRepository.UpsertAndIncrementVersionResult {
         return try {
             dataSource.connection.use { connection ->
                 val originalAutoCommit = connection.autoCommit
                 connection.autoCommit = false
                 try {
-                    val upsertedRows =
-                        connection.prepareStatement(UPSERT).use { statement ->
-                            statement.setString(1, document.app)
-                            statement.setString(2, document.env)
-                            statement.setString(3, document.namespace)
-                            statement.setString(4, document.configKey)
-                            statement.setString(5, document.contentJson)
-                            statement.setString(6, document.updatedBy)
-                            statement.executeUpdate()
-                        }
+                    val upsertedRows = upsertDocument(connection, document, expectedVersion)
                     if (upsertedRows == 0) {
-                        val error =
-                            SQLException(
-                                "Failed to upsert config document (reason=no_rows_affected, app=${document.app}, env=${document.env}, namespace=${document.namespace}, configKey=${document.configKey})"
+                        val currentDocumentVersion =
+                            getDocumentVersion(
+                                connection,
+                                document.app,
+                                document.env,
+                                document.namespace,
+                                document.configKey,
                             )
-                        rollbackSafely(connection, error)
-                        ConfigDocumentRepository.UpsertAndIncrementVersionResult.Failed(error)
+                        connection.rollback()
+                        if (expectedVersion != null) {
+                            ConfigDocumentRepository.UpsertAndIncrementVersionResult
+                                .PreconditionFailed(currentDocumentVersion)
+                        } else {
+                            val error =
+                                SQLException(
+                                    "Failed to upsert config document (reason=no_rows_affected, app=${document.app}, env=${document.env}, namespace=${document.namespace}, configKey=${document.configKey})"
+                                )
+                            ConfigDocumentRepository.UpsertAndIncrementVersionResult.Failed(error)
+                        }
                     } else {
                         val version = incrementVersion(connection, document.app, document.env)
                         connection.commit()
@@ -257,8 +262,9 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
                             statement.executeUpdate()
                         }
                     if (deletedRows == 0) {
+                        val version = getVersion(connection, app, env)
                         connection.rollback()
-                        ConfigDocumentRepository.DeleteAndIncrementVersionResult.NotFound
+                        ConfigDocumentRepository.DeleteAndIncrementVersionResult.NotFound(version)
                     } else {
                         val version = incrementVersion(connection, app, env)
                         connection.commit()
@@ -314,6 +320,57 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
         }
     }
 
+    private fun upsertDocument(
+        connection: Connection,
+        document: ConfigDocument,
+        expectedVersion: Long?,
+    ): Int {
+        return if (expectedVersion != null) {
+            connection.prepareStatement(UPDATE_IF_VERSION_MATCHES).use { statement ->
+                statement.setString(1, document.contentJson)
+                statement.setString(2, document.updatedBy)
+                statement.setString(3, document.app)
+                statement.setString(4, document.env)
+                statement.setString(5, document.namespace)
+                statement.setString(6, document.configKey)
+                statement.setLong(7, expectedVersion)
+                statement.executeUpdate()
+            }
+        } else {
+            connection.prepareStatement(UPSERT).use { statement ->
+                statement.setString(1, document.app)
+                statement.setString(2, document.env)
+                statement.setString(3, document.namespace)
+                statement.setString(4, document.configKey)
+                statement.setString(5, document.contentJson)
+                statement.setString(6, document.updatedBy)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun getDocumentVersion(
+        connection: Connection,
+        app: String,
+        env: String,
+        namespace: String,
+        configKey: String,
+    ): Long? {
+        return connection.prepareStatement(SELECT_DOCUMENT_VERSION).use { statement ->
+            statement.setString(1, app)
+            statement.setString(2, env)
+            statement.setString(3, namespace)
+            statement.setString(4, configKey)
+            statement.executeQuery().use { resultSet ->
+                if (resultSet.next()) {
+                    resultSet.getLong("version")
+                } else {
+                    null
+                }
+            }
+        }
+    }
+
     private fun errorReason(error: SQLException): String {
         return error.message ?: error::class.java.simpleName
     }
@@ -323,12 +380,30 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
 
         private const val UPSERT =
             """
-            INSERT INTO config_documents (app, env, namespace, config_key, content, updated_by, updated_at)
-            VALUES (?, ?, ?, ?, ?::jsonb, ?, now())
+            INSERT INTO config_documents (app, env, namespace, config_key, content, version, updated_by, updated_at)
+            VALUES (?, ?, ?, ?, ?::jsonb, 1, ?, now())
             ON CONFLICT (app, env, namespace, config_key)
             DO UPDATE SET content = EXCLUDED.content,
+                          version = config_documents.version + 1,
                           updated_by = EXCLUDED.updated_by,
                           updated_at = now()
+            """
+
+        private const val UPDATE_IF_VERSION_MATCHES =
+            """
+            UPDATE config_documents
+            SET content = ?::jsonb,
+                version = version + 1,
+                updated_by = ?,
+                updated_at = now()
+            WHERE app = ? AND env = ? AND namespace = ? AND config_key = ? AND version = ?
+            """
+
+        private const val SELECT_DOCUMENT_VERSION =
+            """
+            SELECT version
+            FROM config_documents
+            WHERE app = ? AND env = ? AND namespace = ? AND config_key = ?
             """
 
         private const val INSERT_IF_NOT_EXISTS =

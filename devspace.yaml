@@ -30,7 +30,7 @@ dev:
     # Search for the container that runs this image
     imageSelector: ghcr.io/groundsgg/service-config
     # Replace the container image with this image
-    devImage: gradle:9.2.1-jdk25
+    devImage: gradle:9.4.1-jdk25
     # Sync files between the local filesystem and the development container
     sync:
       - path: ./

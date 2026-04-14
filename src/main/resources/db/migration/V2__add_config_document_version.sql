@@ -1,0 +1,2 @@
+ALTER TABLE config_documents
+    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 1;

@@ -35,9 +35,10 @@ constructor(
         val snapshot =
             documentRepository.getSnapshotIfNewer(context.app, context.env, request.knownVersion)
         if (snapshot == null) {
+            val currentVersion = documentRepository.getVersion(context.app, context.env)
             return GetSnapshotResponse.newBuilder()
                 .setChanged(false)
-                .setVersion(request.knownVersion)
+                .setVersion(currentVersion)
                 .build()
         }
         return toChangedSnapshotResponse(snapshot.version, snapshot.documents)
