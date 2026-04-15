@@ -8,7 +8,7 @@ import javax.sql.DataSource
 import org.jboss.logging.Logger
 
 @ApplicationScoped
-class ConfigVersionRepository @Inject constructor(private val dataSource: DataSource) {
+internal class ConfigVersionRepository @Inject constructor(private val dataSource: DataSource) {
     fun getVersion(app: String, env: String): Long {
         return try {
             dataSource.connection.use { connection -> getVersion(connection, app, env) }

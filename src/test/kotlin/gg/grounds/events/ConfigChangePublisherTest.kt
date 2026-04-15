@@ -9,6 +9,22 @@ class ConfigChangePublisherTest {
     private val objectMapper = ObjectMapper()
 
     @Test
+    fun `publishChange returns skipped when NATS is not connected`() {
+        val publisher = ConfigChangePublisher("nats://localhost:4222", objectMapper)
+
+        val result =
+            publisher.publishChange(
+                app = "lobby",
+                env = "prod",
+                version = 42,
+                namespace = "lobby",
+                configKey = "settings",
+            )
+
+        assertEquals(ConfigChangePublisher.PublishChangeResult.SKIPPED_NOT_CONNECTED, result)
+    }
+
+    @Test
     fun `buildPayload uses configKey field name`() {
         val publisher = ConfigChangePublisher("nats://localhost:4222", objectMapper)
 

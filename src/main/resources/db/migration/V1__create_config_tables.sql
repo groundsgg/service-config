@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS config_documents (
     namespace  TEXT        NOT NULL,
     config_key TEXT        NOT NULL,
     content    JSONB       NOT NULL DEFAULT '{}',
+    version    BIGINT      NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_by TEXT,

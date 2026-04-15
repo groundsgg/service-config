@@ -10,7 +10,9 @@ import javax.sql.DataSource
 import org.jboss.logging.Logger
 
 @ApplicationScoped
-class ConfigDocumentReadRepository @Inject constructor(private val dataSource: DataSource) {
+internal class ConfigDocumentReadRepository
+@Inject
+constructor(private val dataSource: DataSource) {
     fun findAll(app: String, env: String): List<ConfigDocument> {
         return try {
             dataSource.connection.use { connection -> findAll(connection, app, env) }

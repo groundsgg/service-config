@@ -9,7 +9,9 @@ import javax.sql.DataSource
 import org.jboss.logging.Logger
 
 @ApplicationScoped
-class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: DataSource) {
+internal class ConfigDocumentWriteRepository
+@Inject
+constructor(private val dataSource: DataSource) {
     fun upsert(document: ConfigDocument): Boolean {
         return try {
             dataSource.connection.use { connection ->
@@ -57,8 +59,12 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
                             )
                         connection.rollback()
                         if (expectedVersion != null) {
-                            ConfigDocumentRepository.UpsertAndIncrementVersionResult
-                                .PreconditionFailed(currentDocumentVersion)
+                            if (currentDocumentVersion == null) {
+                                ConfigDocumentRepository.UpsertAndIncrementVersionResult.NotFound
+                            } else {
+                                ConfigDocumentRepository.UpsertAndIncrementVersionResult
+                                    .PreconditionFailed(currentDocumentVersion)
+                            }
                         } else {
                             val error =
                                 SQLException(
@@ -80,6 +86,53 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
             }
         } catch (error: SQLException) {
             ConfigDocumentRepository.UpsertAndIncrementVersionResult.Failed(error)
+        }
+    }
+
+    fun createAndIncrementVersion(
+        document: ConfigDocument
+    ): ConfigDocumentRepository.CreateAndIncrementVersionResult {
+        return try {
+            dataSource.connection.use { connection ->
+                val originalAutoCommit = connection.autoCommit
+                connection.autoCommit = false
+                try {
+                    val insertedRows = insertDocumentIfNotExists(connection, document)
+                    if (insertedRows == 0) {
+                        val currentDocumentVersion =
+                            getDocumentVersion(
+                                connection,
+                                document.app,
+                                document.env,
+                                document.namespace,
+                                document.configKey,
+                            )
+                        connection.rollback()
+                        if (currentDocumentVersion == null) {
+                            val error =
+                                SQLException(
+                                    "Failed to create config document (reason=existing_document_version_missing, app=${document.app}, env=${document.env}, namespace=${document.namespace}, configKey=${document.configKey})"
+                                )
+                            ConfigDocumentRepository.CreateAndIncrementVersionResult.Failed(error)
+                        } else {
+                            ConfigDocumentRepository.CreateAndIncrementVersionResult.AlreadyExists(
+                                currentDocumentVersion
+                            )
+                        }
+                    } else {
+                        val version = incrementVersion(connection, document.app, document.env)
+                        connection.commit()
+                        ConfigDocumentRepository.CreateAndIncrementVersionResult.Created(version)
+                    }
+                } catch (error: SQLException) {
+                    rollbackSafely(connection, error)
+                    ConfigDocumentRepository.CreateAndIncrementVersionResult.Failed(error)
+                } finally {
+                    connection.autoCommit = originalAutoCommit
+                }
+            }
+        } catch (error: SQLException) {
+            ConfigDocumentRepository.CreateAndIncrementVersionResult.Failed(error)
         }
     }
 
@@ -168,35 +221,8 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
                 val originalAutoCommit = connection.autoCommit
                 connection.autoCommit = false
                 try {
-                    val createdDefaults =
-                        connection.prepareStatement(INSERT_IF_NOT_EXISTS).use { statement ->
-                            val insertedDefaults =
-                                mutableListOf<ConfigDocumentRepository.DefaultConfig>()
-                            for (defaultConfig in defaults) {
-                                try {
-                                    statement.setString(1, app)
-                                    statement.setString(2, env)
-                                    statement.setString(3, defaultConfig.namespace)
-                                    statement.setString(4, defaultConfig.configKey)
-                                    statement.setString(5, defaultConfig.defaultContentJson)
-                                    if (statement.executeUpdate() > 0) {
-                                        insertedDefaults.add(defaultConfig)
-                                    }
-                                } catch (error: SQLException) {
-                                    throw SQLException(
-                                        "Failed to insert default config (app=$app, env=$env, namespace=${defaultConfig.namespace}, configKey=${defaultConfig.configKey})",
-                                        error,
-                                    )
-                                }
-                            }
-                            insertedDefaults
-                        }
-                    val version =
-                        if (createdDefaults.isNotEmpty()) {
-                            incrementVersion(connection, app, env)
-                        } else {
-                            getVersion(connection, app, env)
-                        }
+                    val createdDefaults = insertMissingDefaults(connection, app, env, defaults)
+                    val version = resolveSyncVersion(connection, app, env, createdDefaults)
                     connection.commit()
                     ConfigDocumentRepository.SyncDefaultsResult(createdDefaults, version)
                 } catch (error: SQLException) {
@@ -320,6 +346,53 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
         }
     }
 
+    private fun insertMissingDefaults(
+        connection: Connection,
+        app: String,
+        env: String,
+        defaults: List<ConfigDocumentRepository.DefaultConfig>,
+    ): List<ConfigDocumentRepository.DefaultConfig> {
+        return connection.prepareStatement(INSERT_IF_NOT_EXISTS).use { statement ->
+            defaults.filter { defaultConfig ->
+                insertDefaultIfMissing(statement, app, env, defaultConfig)
+            }
+        }
+    }
+
+    private fun insertDefaultIfMissing(
+        statement: java.sql.PreparedStatement,
+        app: String,
+        env: String,
+        defaultConfig: ConfigDocumentRepository.DefaultConfig,
+    ): Boolean {
+        return try {
+            statement.setString(1, app)
+            statement.setString(2, env)
+            statement.setString(3, defaultConfig.namespace)
+            statement.setString(4, defaultConfig.configKey)
+            statement.setString(5, defaultConfig.defaultContentJson)
+            statement.executeUpdate() > 0
+        } catch (error: SQLException) {
+            throw SQLException(
+                "Failed to insert default config (app=$app, env=$env, namespace=${defaultConfig.namespace}, configKey=${defaultConfig.configKey})",
+                error,
+            )
+        }
+    }
+
+    private fun resolveSyncVersion(
+        connection: Connection,
+        app: String,
+        env: String,
+        createdDefaults: List<ConfigDocumentRepository.DefaultConfig>,
+    ): Long {
+        return if (createdDefaults.isNotEmpty()) {
+            incrementVersion(connection, app, env)
+        } else {
+            getVersion(connection, app, env)
+        }
+    }
+
     private fun upsertDocument(
         connection: Connection,
         document: ConfigDocument,
@@ -346,6 +419,18 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
                 statement.setString(6, document.updatedBy)
                 statement.executeUpdate()
             }
+        }
+    }
+
+    private fun insertDocumentIfNotExists(connection: Connection, document: ConfigDocument): Int {
+        return connection.prepareStatement(INSERT_IF_NOT_EXISTS_WITH_AUDIT).use { statement ->
+            statement.setString(1, document.app)
+            statement.setString(2, document.env)
+            statement.setString(3, document.namespace)
+            statement.setString(4, document.configKey)
+            statement.setString(5, document.contentJson)
+            statement.setString(6, document.updatedBy)
+            statement.executeUpdate()
         }
     }
 
@@ -410,6 +495,13 @@ class ConfigDocumentWriteRepository @Inject constructor(private val dataSource: 
             """
             INSERT INTO config_documents (app, env, namespace, config_key, content)
             VALUES (?, ?, ?, ?, ?::jsonb)
+            ON CONFLICT (app, env, namespace, config_key) DO NOTHING
+            """
+
+        private const val INSERT_IF_NOT_EXISTS_WITH_AUDIT =
+            """
+            INSERT INTO config_documents (app, env, namespace, config_key, content, version, updated_by, updated_at)
+            VALUES (?, ?, ?, ?, ?::jsonb, 1, ?, now())
             ON CONFLICT (app, env, namespace, config_key) DO NOTHING
             """
 

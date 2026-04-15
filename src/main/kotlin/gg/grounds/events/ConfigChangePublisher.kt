@@ -13,14 +13,20 @@ import org.eclipse.microprofile.config.inject.ConfigProperty
 import org.jboss.logging.Logger
 
 @ApplicationScoped
+/**
+ * Publishes best-effort config change hints over NATS after the database state has already been
+ * committed.
+ *
+ * Consumers must reconcile through `GetSnapshotIfNewer` because NATS delivery is intentionally not
+ * durable in this service.
+ */
 class ConfigChangePublisher
 @Inject
 constructor(
     @param:ConfigProperty(name = "nats.url") private val natsUrl: String,
-    @param:ConfigProperty(name = "nats.max-reconnects")
-    private val maxReconnects: Int = DEFAULT_MAX_RECONNECTS,
+    @param:ConfigProperty(name = "nats.max-reconnects") private val maxReconnects: Int,
     @param:ConfigProperty(name = "nats.reconnect-wait-seconds")
-    private val reconnectWaitSeconds: Long = DEFAULT_RECONNECT_WAIT_SECONDS,
+    private val reconnectWaitSeconds: Long,
     private val objectMapper: ObjectMapper,
 ) {
     constructor(
@@ -33,7 +39,13 @@ constructor(
         objectMapper = objectMapper,
     )
 
-    private var connection: Connection? = null
+    enum class PublishChangeResult {
+        PUBLISHED,
+        SKIPPED_NOT_CONNECTED,
+        FAILED,
+    }
+
+    @Volatile private var connection: Connection? = null
 
     @Synchronized
     fun connect() {
@@ -87,25 +99,46 @@ constructor(
         version: Long,
         namespace: String? = null,
         configKey: String? = null,
-    ) {
+    ): PublishChangeResult {
         val conn = connection
         if (conn == null || conn.status != Connection.Status.CONNECTED) {
             LOG.warnf(
-                "Skipped config change publish (reason=nats_not_connected, app=%s, env=%s, version=%d, natsStatus=%s)",
+                "Config change publish skipped (reason=nats_not_connected, delivery=best_effort, app=%s, env=%s, version=%d, namespace=%s, configKey=%s, natsStatus=%s)",
                 app,
                 env,
                 version,
+                namespace,
+                configKey,
                 connectionStatus(),
             )
-            return
+            return PublishChangeResult.SKIPPED_NOT_CONNECTED
         }
         val subject = "config.$app.$env.changed"
         val payload = buildPayload(app, env, version, namespace, configKey)
         try {
             conn.publish(subject, payload.toByteArray(Charsets.UTF_8))
-            LOG.debugf("Published config change (subject=%s, version=%d)", subject, version)
+            LOG.debugf(
+                "Config change published successfully (subject=%s, app=%s, env=%s, version=%d, namespace=%s, configKey=%s)",
+                subject,
+                app,
+                env,
+                version,
+                namespace,
+                configKey,
+            )
+            return PublishChangeResult.PUBLISHED
         } catch (error: Exception) {
-            LOG.errorf(error, "Failed to publish config change (subject=%s)", subject)
+            LOG.errorf(
+                error,
+                "Failed to publish config change (subject=%s, app=%s, env=%s, version=%d, namespace=%s, configKey=%s)",
+                subject,
+                app,
+                env,
+                version,
+                namespace,
+                configKey,
+            )
+            return PublishChangeResult.FAILED
         }
     }
 

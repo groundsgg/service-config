@@ -67,7 +67,7 @@ object ConfigRequestContexts {
             throw invalidArgument("$fieldName must not be blank")
         }
         if (!SEGMENT_PATTERN.matches(normalizedValue)) {
-            throw invalidArgument("$fieldName must match ${SEGMENT_PATTERN_DESCRIPTION}")
+            throw invalidArgument("$fieldName must match $SEGMENT_PATTERN_DESCRIPTION")
         }
         return normalizedValue
     }

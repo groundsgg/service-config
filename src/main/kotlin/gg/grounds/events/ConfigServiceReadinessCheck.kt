@@ -23,7 +23,7 @@ constructor(
                 .withData("database", if (databaseUp) "up" else "down")
                 .withData("nats", if (natsUp) "up" else "down")
                 .withData("natsStatus", changePublisher.connectionStatus())
-        return if (databaseUp && natsUp) {
+        return if (databaseUp) {
             response.up().build()
         } else {
             response.down().build()

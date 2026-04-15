@@ -94,7 +94,16 @@ constructor(
             )
         }
         if (createdKeys.isNotEmpty()) {
-            changePublisher.publishChange(context.app, context.env, syncResult.version)
+            val changePublishResult =
+                changePublisher.publishChange(context.app, context.env, syncResult.version)
+            LOG.infof(
+                "Default config sync completed successfully (app=%s, env=%s, createdCount=%d, version=%d, changePublishResult=%s, changeDelivery=best_effort)",
+                context.app,
+                context.env,
+                createdKeys.size,
+                syncResult.version,
+                changePublishResult.name.lowercase(),
+            )
         }
         return SyncDefaultsResponse.newBuilder()
             .setVersion(syncResult.version)

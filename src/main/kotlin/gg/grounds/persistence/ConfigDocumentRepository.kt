@@ -10,21 +10,12 @@ import javax.sql.DataSource
 @ApplicationScoped
 class ConfigDocumentRepository
 @Inject
-constructor(
+internal constructor(
     private val dataSource: DataSource,
     private val readRepository: ConfigDocumentReadRepository,
     private val writeRepository: ConfigDocumentWriteRepository,
     private val versionRepository: ConfigVersionRepository,
 ) {
-    constructor(
-        dataSource: DataSource
-    ) : this(
-        dataSource,
-        ConfigDocumentReadRepository(dataSource),
-        ConfigDocumentWriteRepository(dataSource),
-        ConfigVersionRepository(dataSource),
-    )
-
     data class DefaultConfig(
         val namespace: String,
         val configKey: String,
@@ -38,10 +29,20 @@ constructor(
     sealed interface UpsertAndIncrementVersionResult {
         data class Updated(val version: Long) : UpsertAndIncrementVersionResult
 
-        data class PreconditionFailed(val currentDocumentVersion: Long?) :
+        data class PreconditionFailed(val currentDocumentVersion: Long) :
             UpsertAndIncrementVersionResult
 
+        data object NotFound : UpsertAndIncrementVersionResult
+
         data class Failed(val cause: SQLException) : UpsertAndIncrementVersionResult
+    }
+
+    sealed interface CreateAndIncrementVersionResult {
+        data class Created(val version: Long) : CreateAndIncrementVersionResult
+
+        data class AlreadyExists(val currentDocumentVersion: Long) : CreateAndIncrementVersionResult
+
+        data class Failed(val cause: SQLException) : CreateAndIncrementVersionResult
     }
 
     sealed interface DeleteAndIncrementVersionResult {
@@ -98,6 +99,9 @@ constructor(
         expectedVersion: Long? = null,
     ): UpsertAndIncrementVersionResult =
         writeRepository.upsertAndIncrementVersion(document, expectedVersion)
+
+    fun createAndIncrementVersion(document: ConfigDocument): CreateAndIncrementVersionResult =
+        writeRepository.createAndIncrementVersion(document)
 
     fun insertIfNotExists(
         app: String,

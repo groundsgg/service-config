@@ -3,6 +3,8 @@ package gg.grounds.api
 import com.fasterxml.jackson.databind.ObjectMapper
 import gg.grounds.domain.ConfigDocument
 import gg.grounds.events.ConfigChangePublisher
+import gg.grounds.grpc.config.CreateDocumentRequest
+import gg.grounds.grpc.config.CreateDocumentResponse
 import gg.grounds.grpc.config.DeleteDocumentRequest
 import gg.grounds.grpc.config.DeleteDocumentResponse
 import gg.grounds.grpc.config.GetDocumentRequest
@@ -54,6 +56,71 @@ constructor(
             ),
         )
 
+    fun createDocument(request: CreateDocumentRequest): CreateDocumentResponse {
+        val context =
+            ConfigRequestContexts.toDocumentContext(
+                request.app,
+                request.env,
+                request.namespace,
+                request.configKey,
+            )
+        validateJsonContent(request.contentJson)
+        val updatedBy = request.updatedBy.trim().ifEmpty { null }
+        val document =
+            ConfigDocument(
+                app = context.app,
+                env = context.env,
+                namespace = context.namespace,
+                configKey = context.configKey,
+                contentJson = request.contentJson,
+                updatedBy = updatedBy,
+            )
+        val version =
+            when (val result = documentRepository.createAndIncrementVersion(document)) {
+                is ConfigDocumentRepository.CreateAndIncrementVersionResult.Created ->
+                    result.version
+                is ConfigDocumentRepository.CreateAndIncrementVersionResult.AlreadyExists -> {
+                    throw Status.ALREADY_EXISTS.withDescription(
+                            "Config document already exists (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, currentVersion=${result.currentDocumentVersion})"
+                        )
+                        .asRuntimeException()
+                }
+                is ConfigDocumentRepository.CreateAndIncrementVersionResult.Failed -> {
+                    LOG.errorf(
+                        result.cause,
+                        "Failed to create config document (app=%s, env=%s, namespace=%s, configKey=%s)",
+                        context.app,
+                        context.env,
+                        context.namespace,
+                        context.configKey,
+                    )
+                    throw Status.INTERNAL.withDescription(
+                            "Failed to create config document (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})"
+                        )
+                        .asRuntimeException()
+                }
+            }
+        val changePublishResult =
+            changePublisher.publishChange(
+                context.app,
+                context.env,
+                version,
+                context.namespace,
+                context.configKey,
+            )
+        LOG.infof(
+            "Config document created successfully (app=%s, env=%s, namespace=%s, configKey=%s, version=%d, updatedBy=%s, changePublishResult=%s, changeDelivery=best_effort)",
+            context.app,
+            context.env,
+            context.namespace,
+            context.configKey,
+            version,
+            updatedBy,
+            changePublishResult.name.lowercase(),
+        )
+        return CreateDocumentResponse.newBuilder().setVersion(version).build()
+    }
+
     fun putDocument(request: PutDocumentRequest): PutDocumentResponse {
         val context =
             ConfigRequestContexts.toDocumentContext(
@@ -63,6 +130,7 @@ constructor(
                 request.configKey,
             )
         validateJsonContent(request.contentJson)
+        validateExpectedVersion(request)
         val updatedBy = request.updatedBy.trim().ifEmpty { null }
         val document =
             ConfigDocument(
@@ -86,6 +154,12 @@ constructor(
                         )
                         .asRuntimeException()
                 }
+                ConfigDocumentRepository.UpsertAndIncrementVersionResult.NotFound -> {
+                    throw Status.NOT_FOUND.withDescription(
+                            "Config document not found (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, expectedVersion=$expectedVersion)"
+                        )
+                        .asRuntimeException()
+                }
                 is ConfigDocumentRepository.UpsertAndIncrementVersionResult.Failed -> {
                     LOG.errorf(
                         result.cause,
@@ -101,21 +175,25 @@ constructor(
                         .asRuntimeException()
                 }
             }
-        changePublisher.publishChange(
-            context.app,
-            context.env,
-            version,
-            context.namespace,
-            context.configKey,
-        )
+        // NATS notifications are best-effort. Consumers must reconcile via GetSnapshotIfNewer
+        // because the database commit succeeds before publish is attempted.
+        val changePublishResult =
+            changePublisher.publishChange(
+                context.app,
+                context.env,
+                version,
+                context.namespace,
+                context.configKey,
+            )
         LOG.infof(
-            "Config document updated (app=%s, env=%s, namespace=%s, configKey=%s, version=%d, updatedBy=%s)",
+            "Config document updated successfully (app=%s, env=%s, namespace=%s, configKey=%s, version=%d, updatedBy=%s, changePublishResult=%s, changeDelivery=best_effort)",
             context.app,
             context.env,
             context.namespace,
             context.configKey,
             version,
             updatedBy,
+            changePublishResult.name.lowercase(),
         )
         return PutDocumentResponse.newBuilder().setVersion(version).build()
     }
@@ -139,21 +217,23 @@ constructor(
                 )
         ) {
             is ConfigDocumentRepository.DeleteAndIncrementVersionResult.Deleted -> {
-                changePublisher.publishChange(
-                    context.app,
-                    context.env,
-                    result.version,
-                    context.namespace,
-                    context.configKey,
-                )
+                val changePublishResult =
+                    changePublisher.publishChange(
+                        context.app,
+                        context.env,
+                        result.version,
+                        context.namespace,
+                        context.configKey,
+                    )
                 LOG.infof(
-                    "Config document deleted successfully (app=%s, env=%s, namespace=%s, configKey=%s, version=%d, deletedBy=%s)",
+                    "Config document deleted successfully (app=%s, env=%s, namespace=%s, configKey=%s, version=%d, deletedBy=%s, changePublishResult=%s, changeDelivery=best_effort)",
                     context.app,
                     context.env,
                     context.namespace,
                     context.configKey,
                     result.version,
                     deletedBy,
+                    changePublishResult.name.lowercase(),
                 )
                 DeleteDocumentResponse.newBuilder()
                     .setDeleted(true)
@@ -189,6 +269,15 @@ constructor(
                     )
                     .asRuntimeException()
             }
+        }
+    }
+
+    private fun validateExpectedVersion(request: PutDocumentRequest) {
+        if (request.hasExpectedVersion() && request.expectedVersion <= 0L) {
+            throw Status.INVALID_ARGUMENT.withDescription(
+                    "expectedVersion must be greater than 0 when provided; use CreateDocument for create-if-absent semantics"
+                )
+                .asRuntimeException()
         }
     }
 

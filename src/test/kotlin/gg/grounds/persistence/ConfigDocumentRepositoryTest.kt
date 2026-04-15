@@ -22,7 +22,7 @@ import org.mockito.kotlin.whenever
 
 class ConfigDocumentRepositoryTest {
     private val dataSource: DataSource = mock()
-    private val repository = ConfigDocumentRepository(dataSource)
+    private val repository = createRepository(dataSource)
 
     @Test
     fun `findAll rethrows SQLException when read fails`() {
@@ -68,7 +68,7 @@ class ConfigDocumentRepositoryTest {
         val documentStatement: PreparedStatement = mock()
         val versionResultSet: ResultSet = mock()
         val documentResultSet: ResultSet = mock()
-        val snapshotRepository = ConfigDocumentRepository(snapshotDataSource)
+        val snapshotRepository = createRepository(snapshotDataSource)
         whenever(snapshotDataSource.connection).thenReturn(snapshotConnection)
         whenever(snapshotConnection.autoCommit).thenReturn(true)
         whenever(snapshotConnection.isReadOnly).thenReturn(false)
@@ -113,7 +113,7 @@ class ConfigDocumentRepositoryTest {
         val snapshotConnection: Connection = mock()
         val versionStatement: PreparedStatement = mock()
         val versionResultSet: ResultSet = mock()
-        val snapshotRepository = ConfigDocumentRepository(snapshotDataSource)
+        val snapshotRepository = createRepository(snapshotDataSource)
         whenever(snapshotDataSource.connection).thenReturn(snapshotConnection)
         whenever(snapshotConnection.autoCommit).thenReturn(true)
         whenever(snapshotConnection.isReadOnly).thenReturn(false)
@@ -138,7 +138,7 @@ class ConfigDocumentRepositoryTest {
         val upsertStatement: PreparedStatement = mock()
         val incrementStatement: PreparedStatement = mock()
         val incrementResultSet: ResultSet = mock()
-        val transactionRepository = ConfigDocumentRepository(transactionDataSource)
+        val transactionRepository = createRepository(transactionDataSource)
         val document =
             ConfigDocument(
                 app = "player",
@@ -169,7 +169,7 @@ class ConfigDocumentRepositoryTest {
         val transactionConnection: Connection = mock()
         val upsertStatement: PreparedStatement = mock()
         val incrementStatement: PreparedStatement = mock()
-        val transactionRepository = ConfigDocumentRepository(transactionDataSource)
+        val transactionRepository = createRepository(transactionDataSource)
         val document =
             ConfigDocument(
                 app = "player",
@@ -205,7 +205,7 @@ class ConfigDocumentRepositoryTest {
         val updateStatement: PreparedStatement = mock()
         val currentVersionStatement: PreparedStatement = mock()
         val currentVersionResultSet: ResultSet = mock()
-        val transactionRepository = ConfigDocumentRepository(transactionDataSource)
+        val transactionRepository = createRepository(transactionDataSource)
         val document =
             ConfigDocument(
                 app = "player",
@@ -235,11 +235,112 @@ class ConfigDocumentRepositoryTest {
     }
 
     @Test
+    fun `createAndIncrementVersion commits and returns created version when document is new`() {
+        val transactionDataSource: DataSource = mock()
+        val transactionConnection: Connection = mock()
+        val insertStatement: PreparedStatement = mock()
+        val incrementStatement: PreparedStatement = mock()
+        val incrementResultSet: ResultSet = mock()
+        val transactionRepository = createRepository(transactionDataSource)
+        val document =
+            ConfigDocument(
+                app = "player",
+                env = "prod",
+                namespace = "feature-flags",
+                configKey = "new-ui",
+                contentJson = "{}",
+                updatedBy = "tester",
+            )
+        whenever(transactionDataSource.connection).thenReturn(transactionConnection)
+        whenever(transactionConnection.autoCommit).thenReturn(true)
+        whenever(transactionConnection.prepareStatement(any()))
+            .thenReturn(insertStatement, incrementStatement)
+        whenever(insertStatement.executeUpdate()).thenReturn(1)
+        whenever(incrementStatement.executeQuery()).thenReturn(incrementResultSet)
+        whenever(incrementResultSet.next()).thenReturn(true)
+        whenever(incrementResultSet.getLong("version")).thenReturn(9L)
+
+        val result = transactionRepository.createAndIncrementVersion(document)
+
+        assertEquals(ConfigDocumentRepository.CreateAndIncrementVersionResult.Created(9L), result)
+        verify(transactionConnection).commit()
+        verify(transactionConnection, never()).rollback()
+    }
+
+    @Test
+    fun `createAndIncrementVersion returns already exists when document already exists`() {
+        val transactionDataSource: DataSource = mock()
+        val transactionConnection: Connection = mock()
+        val insertStatement: PreparedStatement = mock()
+        val currentVersionStatement: PreparedStatement = mock()
+        val currentVersionResultSet: ResultSet = mock()
+        val transactionRepository = createRepository(transactionDataSource)
+        val document =
+            ConfigDocument(
+                app = "player",
+                env = "prod",
+                namespace = "feature-flags",
+                configKey = "new-ui",
+                contentJson = "{}",
+                updatedBy = "tester",
+            )
+        whenever(transactionDataSource.connection).thenReturn(transactionConnection)
+        whenever(transactionConnection.autoCommit).thenReturn(true)
+        whenever(transactionConnection.prepareStatement(any()))
+            .thenReturn(insertStatement, currentVersionStatement)
+        whenever(insertStatement.executeUpdate()).thenReturn(0)
+        whenever(currentVersionStatement.executeQuery()).thenReturn(currentVersionResultSet)
+        whenever(currentVersionResultSet.next()).thenReturn(true)
+        whenever(currentVersionResultSet.getLong("version")).thenReturn(3L)
+
+        val result = transactionRepository.createAndIncrementVersion(document)
+
+        assertEquals(
+            ConfigDocumentRepository.CreateAndIncrementVersionResult.AlreadyExists(3L),
+            result,
+        )
+        verify(transactionConnection).rollback()
+        verify(transactionConnection, never()).commit()
+    }
+
+    @Test
+    fun `upsertAndIncrementVersion returns not found when expected version is provided and document is missing`() {
+        val transactionDataSource: DataSource = mock()
+        val transactionConnection: Connection = mock()
+        val updateStatement: PreparedStatement = mock()
+        val currentVersionStatement: PreparedStatement = mock()
+        val currentVersionResultSet: ResultSet = mock()
+        val transactionRepository = createRepository(transactionDataSource)
+        val document =
+            ConfigDocument(
+                app = "player",
+                env = "prod",
+                namespace = "feature-flags",
+                configKey = "new-ui",
+                contentJson = "{}",
+                updatedBy = "tester",
+            )
+        whenever(transactionDataSource.connection).thenReturn(transactionConnection)
+        whenever(transactionConnection.autoCommit).thenReturn(true)
+        whenever(transactionConnection.prepareStatement(any()))
+            .thenReturn(updateStatement, currentVersionStatement)
+        whenever(updateStatement.executeUpdate()).thenReturn(0)
+        whenever(currentVersionStatement.executeQuery()).thenReturn(currentVersionResultSet)
+        whenever(currentVersionResultSet.next()).thenReturn(false)
+
+        val result = transactionRepository.upsertAndIncrementVersion(document, 3L)
+
+        assertEquals(ConfigDocumentRepository.UpsertAndIncrementVersionResult.NotFound, result)
+        verify(transactionConnection).rollback()
+        verify(transactionConnection, never()).commit()
+    }
+
+    @Test
     fun `insertIfNotExists with defaults list reuses connection and statement`() {
         val batchDataSource: DataSource = mock()
         val batchConnection: Connection = mock()
         val batchStatement: PreparedStatement = mock()
-        val batchRepository = ConfigDocumentRepository(batchDataSource)
+        val batchRepository = createRepository(batchDataSource)
         val firstDefault =
             ConfigDocumentRepository.DefaultConfig(
                 namespace = "feature-flags",
@@ -272,7 +373,7 @@ class ConfigDocumentRepositoryTest {
         val batchDataSource: DataSource = mock()
         val batchConnection: Connection = mock()
         val batchStatement: PreparedStatement = mock()
-        val batchRepository = ConfigDocumentRepository(batchDataSource)
+        val batchRepository = createRepository(batchDataSource)
         val firstDefault =
             ConfigDocumentRepository.DefaultConfig(
                 namespace = "feature-flags",
@@ -312,7 +413,7 @@ class ConfigDocumentRepositoryTest {
         val insertStatement: PreparedStatement = mock()
         val incrementStatement: PreparedStatement = mock()
         val incrementResultSet: ResultSet = mock()
-        val batchRepository = ConfigDocumentRepository(batchDataSource)
+        val batchRepository = createRepository(batchDataSource)
         val defaultConfig =
             ConfigDocumentRepository.DefaultConfig(
                 namespace = "feature-flags",
@@ -342,7 +443,7 @@ class ConfigDocumentRepositoryTest {
         val batchConnection: Connection = mock()
         val insertStatement: PreparedStatement = mock()
         val incrementStatement: PreparedStatement = mock()
-        val batchRepository = ConfigDocumentRepository(batchDataSource)
+        val batchRepository = createRepository(batchDataSource)
         val defaultConfig =
             ConfigDocumentRepository.DefaultConfig(
                 namespace = "feature-flags",
@@ -374,7 +475,7 @@ class ConfigDocumentRepositoryTest {
         val deleteStatement: PreparedStatement = mock()
         val versionStatement: PreparedStatement = mock()
         val versionResultSet: ResultSet = mock()
-        val transactionRepository = ConfigDocumentRepository(transactionDataSource)
+        val transactionRepository = createRepository(transactionDataSource)
         whenever(transactionDataSource.connection).thenReturn(transactionConnection)
         whenever(transactionConnection.autoCommit).thenReturn(true)
         whenever(transactionConnection.prepareStatement(any()))
@@ -396,4 +497,12 @@ class ConfigDocumentRepositoryTest {
         verify(transactionConnection).rollback()
         verify(transactionConnection, never()).commit()
     }
+
+    private fun createRepository(dataSource: DataSource) =
+        ConfigDocumentRepository(
+            dataSource,
+            ConfigDocumentReadRepository(dataSource),
+            ConfigDocumentWriteRepository(dataSource),
+            ConfigVersionRepository(dataSource),
+        )
 }

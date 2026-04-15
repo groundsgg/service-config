@@ -1,6 +1,8 @@
 package gg.grounds.api
 
 import gg.grounds.grpc.config.ConfigAdminService
+import gg.grounds.grpc.config.CreateDocumentRequest
+import gg.grounds.grpc.config.CreateDocumentResponse
 import gg.grounds.grpc.config.DeleteDocumentRequest
 import gg.grounds.grpc.config.DeleteDocumentResponse
 import gg.grounds.grpc.config.GetDocumentRequest
@@ -25,6 +27,10 @@ constructor(private val documentService: ConfigAdminDocumentService) : ConfigAdm
 
     override fun getDocument(request: GetDocumentRequest): Uni<GetDocumentResponse> {
         return Uni.createFrom().item { documentService.getDocument(request) }
+    }
+
+    override fun createDocument(request: CreateDocumentRequest): Uni<CreateDocumentResponse> {
+        return Uni.createFrom().item { documentService.createDocument(request) }
     }
 
     override fun putDocument(request: PutDocumentRequest): Uni<PutDocumentResponse> {
