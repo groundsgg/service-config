@@ -1,0 +1,50 @@
+version: v2beta1
+name: service-config
+
+deployments:
+  app:
+    namespace: api
+    helm:
+      releaseName: service-config
+      chart:
+        name: oci://ghcr.io/groundsgg/charts/grounds-service
+        version: 0.1.0
+      values:
+        deployment:
+          image:
+            repository: ghcr.io/groundsgg/service-config
+            tag: edge
+          containerPort: 9000
+          env:
+            - name: POSTGRES_URL
+              value: jdbc:postgresql://postgresql.databases:5432/app?currentSchema=config
+            - name: NATS_URL
+              value: nats://nats.infra:4222
+        service:
+          enabled: true
+          port: 9000
+          targetPort: 9000
+
+dev:
+  app:
+    # Search for the container that runs this image
+    imageSelector: ghcr.io/groundsgg/service-config
+    # Replace the container image with this image
+    devImage: gradle:9.4.1-jdk25
+    # Sync files between the local filesystem and the development container
+    sync:
+      - path: ./
+        excludePaths:
+          - .gradle/
+          - build/
+      - path: ${HOME}/.gradle/gradle.properties:/tmp/gradle-user-home/gradle.properties
+        file: true
+    # Open a terminal and use the following command to start it
+    terminal:
+      command: |
+        export QUARKUS_ANALYTICS_DISABLED=true
+        export GRADLE_USER_HOME=/tmp/gradle-user-home
+        ./gradlew --console=plain quarkusDev
+    # Forward the following ports to be able to access your application via localhost
+    ports:
+      - port: "9000"
