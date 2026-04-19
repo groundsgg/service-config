@@ -15,9 +15,6 @@ best-effort latency optimization, not a durable source of truth.
 - Config consumers must treat `GetSnapshotIfNewer` snapshot polling as the reconciliation path and
   source of truth for cache correctness.
 
-The rationale and trade-offs are documented in
-[docs/adr/0001-config-change-event-delivery.md](docs/adr/0001-config-change-event-delivery.md).
-
 ## Security
 
 The admin gRPC API does not enforce application-level authentication or authorization in this
