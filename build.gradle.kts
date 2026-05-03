@@ -23,6 +23,11 @@ dependencies {
     implementation("io.quarkus:quarkus-flyway")
     implementation("io.quarkus:quarkus-kotlin")
     implementation("gg.grounds:library-grpc-contracts-config:feat-config-SNAPSHOT")
+    // Phase-10: typed NATS event payloads + subject patterns —
+    // shared with every other service that publishes/subscribes
+    // grounds events. Replaces the hand-rolled JSON in
+    // ConfigChangePublisher.
+    implementation("gg.grounds:library-grpc-contracts-events:1.0.0")
     implementation("io.nats:jnats:2.25.1")
 
     compileOnly("com.google.protobuf:protobuf-kotlin")
