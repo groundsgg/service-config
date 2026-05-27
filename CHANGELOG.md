@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/groundsgg/service-config/compare/v0.1.0...v0.2.0) (2026-05-27)
+
+
+### Features
+
+* **auth:** JWT validation + AuthGuard for service-config ([#20](https://github.com/groundsgg/service-config/issues/20)) ([3865dc5](https://github.com/groundsgg/service-config/commit/3865dc52e81545712f663b7a3b2ae3d53254cddf))
+
 ## [0.1.0](https://github.com/groundsgg/service-config/compare/v0.0.1...v0.1.0) (2026-04-19)
 
 
