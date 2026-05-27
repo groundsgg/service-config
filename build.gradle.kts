@@ -26,6 +26,8 @@ dependencies {
     implementation("io.quarkus:quarkus-smallrye-health")
     implementation("gg.grounds:library-grpc-contracts-config:0.2.0")
     implementation("io.nats:jnats:2.25.2")
+    // JWT validation for incoming gRPC calls (v2.2 Service Architecture).
+    implementation("com.nimbusds:nimbus-jose-jwt:9.41.1")
 
     compileOnly("com.google.protobuf:protobuf-kotlin")
 
