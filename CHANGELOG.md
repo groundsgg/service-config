@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/groundsgg/service-config/compare/v0.2.0...v0.3.0) (2026-05-27)
+
+
+### Features
+
+* **auth:** admin-only Method-ACL for ConfigAdminGrpcService ([#22](https://github.com/groundsgg/service-config/issues/22)) ([b62e92c](https://github.com/groundsgg/service-config/commit/b62e92c9dd589b5b2f04a1a75a8af54e9bd3e568))
+
 ## [0.2.0](https://github.com/groundsgg/service-config/compare/v0.1.0...v0.2.0) (2026-05-27)
 
 
