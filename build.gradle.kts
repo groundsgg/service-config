@@ -28,6 +28,8 @@ dependencies {
     implementation("io.nats:jnats:2.25.2")
     // JWT validation for incoming gRPC calls (v2.2 Service Architecture).
     implementation("com.nimbusds:nimbus-jose-jwt:9.41.1")
+    // OpenTelemetry — server-side gRPC spans → Alloy → Tempo.
+    implementation("io.quarkus:quarkus-opentelemetry")
 
     compileOnly("com.google.protobuf:protobuf-kotlin")
 
