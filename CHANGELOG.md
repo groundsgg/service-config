@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/groundsgg/service-config/compare/v0.3.0...v0.4.0) (2026-05-28)
+
+
+### Features
+
+* **otel:** server-side traces to Alloy ([#26](https://github.com/groundsgg/service-config/issues/26)) ([24dc5df](https://github.com/groundsgg/service-config/commit/24dc5df2ea37cc26b5a627d778807f6b4a3ef1fc))
+
 ## [0.3.0](https://github.com/groundsgg/service-config/compare/v0.2.0...v0.3.0) (2026-05-27)
 
 
