@@ -7,6 +7,8 @@ import io.nats.client.Nats
 import io.nats.client.Options
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.inject.Inject
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import org.eclipse.microprofile.config.inject.ConfigProperty
@@ -27,6 +29,7 @@ constructor(
     @param:ConfigProperty(name = "nats.max-reconnects") private val maxReconnects: Int,
     @param:ConfigProperty(name = "nats.reconnect-wait-seconds")
     private val reconnectWaitSeconds: Long,
+    @param:ConfigProperty(name = "grounds.token-file") private val groundsTokenFile: String,
     private val objectMapper: ObjectMapper,
 ) {
     constructor(
@@ -36,6 +39,7 @@ constructor(
         natsUrl = natsUrl,
         maxReconnects = DEFAULT_MAX_RECONNECTS,
         reconnectWaitSeconds = DEFAULT_RECONNECT_WAIT_SECONDS,
+        groundsTokenFile = DEFAULT_GROUNDS_TOKEN_FILE,
         objectMapper = objectMapper,
     )
 
@@ -63,7 +67,7 @@ constructor(
             }
         }
         try {
-            val options =
+            val builder =
                 Options.Builder()
                     .server(natsUrl)
                     .maxReconnects(maxReconnects)
@@ -73,8 +77,16 @@ constructor(
                             onConnectionEvent(connected, event)
                         }
                     )
-                    .build()
-            connection = Nats.connect(options)
+            // Present the projected SA-token (audience grounds-services) as the
+            // NATS bearer for the auth-callout broker. tokenSupplier lands it in
+            // the CONNECT `auth_token` field and is re-invoked per (re)connect,
+            // so kubelet token rotation is picked up. Skipped when the token
+            // file is absent (local/dev without the projected volume).
+            val tokenPath = Path.of(groundsTokenFile)
+            if (Files.exists(tokenPath)) {
+                builder.tokenSupplier { Files.readString(tokenPath).trim().toCharArray() }
+            }
+            connection = Nats.connect(builder.build())
             LOG.infof(
                 "Connected to NATS successfully (url=%s, maxReconnects=%d, reconnectWaitSeconds=%d)",
                 natsUrl,
@@ -225,6 +237,7 @@ constructor(
     companion object {
         private const val DEFAULT_MAX_RECONNECTS = -1
         private const val DEFAULT_RECONNECT_WAIT_SECONDS = 2L
+        private const val DEFAULT_GROUNDS_TOKEN_FILE = "/var/run/secrets/grounds/token"
         private val LOG = Logger.getLogger(ConfigChangePublisher::class.java)
     }
 }
