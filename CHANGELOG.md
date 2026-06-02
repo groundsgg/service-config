@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/groundsgg/service-config/compare/v0.4.0...v0.5.0) (2026-06-02)
+
+
+### Features
+
+* **nats:** present projected SA-token as NATS bearer (B4) ([#30](https://github.com/groundsgg/service-config/issues/30)) ([5582191](https://github.com/groundsgg/service-config/commit/5582191096c441c2fbd380c8e625d4c740f6c068))
+
+
+### Bug Fixes
+
+* **auth:** JWKS fetch trusts cluster CA + sends SA-bearer (OVH-MKS) ([#28](https://github.com/groundsgg/service-config/issues/28)) ([8f40179](https://github.com/groundsgg/service-config/commit/8f401795d87651e05d921a43b5e6dd0d6f12058d))
+
 ## [0.4.0](https://github.com/groundsgg/service-config/compare/v0.3.0...v0.4.0) (2026-05-28)
 
 
