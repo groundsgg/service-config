@@ -17,12 +17,41 @@ best-effort latency optimization, not a durable source of truth.
 
 ## Security
 
-The admin gRPC API does not enforce application-level authentication or authorization in this
-service today. That is currently expected to be handled by deployment controls such as private
-networking or mTLS.
+Every gRPC call is authenticated: `GroundsAuthInterceptor` verifies the caller's projected
+ServiceAccount JWT against the cluster's JWKS and requires audience `grounds-services`. Set
+`GROUNDS_AUTH_ENABLED=false` for local dev, where no token is projected.
 
-This is a deliberate gap to track, not an implicit guarantee. Admin API auth is still required and
-must be treated as a follow-up item rather than part of the current PR scope.
+Authorization on top of that:
+
+| API | who |
+|---|---|
+| `ConfigService` (reads, `SyncDefaults`) | any authenticated caller |
+| `ConfigAdminService.ListDocuments` / `GetDocument` / `CreateDocument` | admins only |
+| `ConfigAdminService.PutDocument` / `DeleteDocument` | admins, **plus** a writer named for that app |
+
+An admin is a caller whose JWT `sub` ends in `:platform-admin` or `:config-admin` — ops creates
+those ServiceAccounts by hand, and their existence is the grant (`AuthGuard`).
+
+`GROUNDS_CONFIG_WRITERS` names callers that may replace or delete documents of **one** app without
+being admins, as `<subject-suffix>=<app>`:
+
+```
+GROUNDS_CONFIG_WRITERS=":velocity=velocity,:velocity-2=velocity"
+```
+
+This is how a service owns its own configuration — the Velocity proxies write the network MOTD —
+without being handed every other app's along with it. A pod cannot opt into being an admin for one
+call: a projected token always carries the pod's own ServiceAccount, so making the proxies
+`config-admin` would be the only alternative, and that grants far more than the one document.
+
+Suffix matching is namespace-agnostic, deliberately and exactly like the admin rule: the same
+deployment exists in every region, and pinning the namespace would mean an entry per region that
+nobody would keep in step. Two entries above rather than one because the two proxy releases run
+under two ServiceAccounts and share a single document.
+
+Unset (the default) means admin-only. Creating stays admin-only in every case: which documents exist
+in an app is a shape decision, and `PutDocument` is already the create-or-replace path a
+self-configuring service needs.
 
 ## Operations
 
