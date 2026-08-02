@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/groundsgg/service-config/compare/v0.5.0...v0.6.0) (2026-08-02)
+
+
+### Features
+
+* **auth:** let a named writer change one app's documents ([#31](https://github.com/groundsgg/service-config/issues/31)) ([958605d](https://github.com/groundsgg/service-config/commit/958605d5bc94f0452070ac9f8cbedeb4a6f80180))
+
 ## [0.5.0](https://github.com/groundsgg/service-config/compare/v0.4.0...v0.5.0) (2026-06-02)
 
 
