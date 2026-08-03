@@ -1,0 +1,4 @@
+name: service-config
+type: service
+baseImage: service
+jar: build/libs/service-config-local-SNAPSHOT.jar
