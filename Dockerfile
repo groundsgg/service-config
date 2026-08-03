@@ -24,11 +24,11 @@ RUN --mount=type=cache,target=/root/.gradle/caches,sharing=locked \
 
 FROM gcr.io/distroless/java25-debian13 AS runtime
 
-WORKDIR /deployments/quarkus-app
+WORKDIR /deployments
 
 USER nonroot:nonroot
 
-COPY --from=build --chown=nonroot:nonroot /workspace/build/quarkus-app/ ./
+COPY --from=build --chown=nonroot:nonroot /workspace/build/*-runner.jar ./service-config-runner.jar
 
 EXPOSE 9000
-ENTRYPOINT ["java", "-jar", "quarkus-run.jar"]
+ENTRYPOINT ["java", "-jar", "service-config-runner.jar"]
