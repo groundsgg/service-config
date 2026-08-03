@@ -1,5 +1,10 @@
 package gg.grounds.auth
 
+import io.smallrye.config.PropertiesConfigSource
+import io.smallrye.config.SmallRyeConfigBuilder
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Properties
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -50,6 +55,23 @@ class ConfigWritePolicyTest {
 
         assertEquals(0, none.writerCount())
         assertFalse(none.mayWrite("system:serviceaccount:stage:velocity", "velocity"))
+    }
+
+    @Test
+    fun `unconfigured scoped writers resolve to an empty policy`() {
+        val properties =
+            Properties().apply {
+                Files.newInputStream(Path.of("src/main/resources/application.properties"))
+                    .use(::load)
+            }
+        val configured =
+            SmallRyeConfigBuilder()
+                .withSources(PropertiesConfigSource(properties, "application.properties"))
+                .addDefaultInterceptors()
+                .build()
+                .getValue("grounds.auth.scoped-writers", String::class.java)
+
+        assertEquals(0, ConfigWritePolicy(configured).writerCount())
     }
 
     /** One typo in a comma-separated list must not stop the service from starting. */
