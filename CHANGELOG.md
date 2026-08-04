@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0](https://github.com/groundsgg/service-config/compare/v0.6.0...v0.7.0) (2026-08-04)
+
+
+### Features
+
+* add grounds push integration ([#33](https://github.com/groundsgg/service-config/issues/33)) ([e108b8e](https://github.com/groundsgg/service-config/commit/e108b8e6635207f48f7b5db61ffca59bdabe44e9))
+* **metrics:** expose JVM, HTTP and connection-pool metrics ([#42](https://github.com/groundsgg/service-config/issues/42)) ([e482cd4](https://github.com/groundsgg/service-config/commit/e482cd415a9b6c417aef56342062f160113bcf8b))
+
+
+### Bug Fixes
+
+* default scoped writers to empty policy ([#37](https://github.com/groundsgg/service-config/issues/37)) ([f412a9f](https://github.com/groundsgg/service-config/commit/f412a9f6eca308f4bf1b3ec7eae7876ba732a9d5))
+* package executable jar for grounds push ([#35](https://github.com/groundsgg/service-config/issues/35)) ([3bfbf8a](https://github.com/groundsgg/service-config/commit/3bfbf8a36b0cef210e36dcda5bd93e2df8c9e9dd))
+* run executable Quarkus jar ([#36](https://github.com/groundsgg/service-config/issues/36)) ([77b824c](https://github.com/groundsgg/service-config/commit/77b824c192b4ce735f9924f19c4095f63fd28c52))
+
 ## [0.6.0](https://github.com/groundsgg/service-config/compare/v0.5.0...v0.6.0) (2026-08-02)
 
 
