@@ -26,7 +26,7 @@ dependencies {
     implementation("io.quarkus:quarkus-kotlin")
     implementation("io.quarkus:quarkus-smallrye-health")
     implementation("gg.grounds:library-grpc-contracts-config:0.2.0")
-    implementation("io.nats:jnats:2.25.3")
+    implementation("io.nats:jnats:2.26.0")
     // JWT validation for incoming gRPC calls (v2.2 Service Architecture).
     implementation("com.nimbusds:nimbus-jose-jwt:10.9")
     // OpenTelemetry — server-side gRPC spans → Alloy → Tempo.
