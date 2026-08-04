@@ -50,3 +50,10 @@ tasks
         dependsOn("quarkusGenerateCode")
         dependsOn("quarkusGenerateCodeDev")
     }
+
+tasks.processResources {
+    val projectVersion = version.toString()
+    filesMatching("**/default_banner.txt") {
+        filter { line: String -> line.replace("@VERSION@", projectVersion) }
+    }
+}
