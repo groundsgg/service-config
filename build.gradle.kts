@@ -31,6 +31,8 @@ dependencies {
     implementation("com.nimbusds:nimbus-jose-jwt:10.9")
     // OpenTelemetry — server-side gRPC spans → Alloy → Tempo.
     implementation("io.quarkus:quarkus-opentelemetry")
+    // Prometheus metrics on /q/metrics — JVM, HTTP and the Agroal pool.
+    implementation("io.quarkus:quarkus-micrometer-registry-prometheus")
 
     compileOnly("com.google.protobuf:protobuf-kotlin")
 
