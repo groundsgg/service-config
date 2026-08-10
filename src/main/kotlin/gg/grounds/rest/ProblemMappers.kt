@@ -1,7 +1,7 @@
 package gg.grounds.rest
 
-import io.grpc.Status
-import io.grpc.StatusRuntimeException
+import gg.grounds.domain.ConfigErrorCode
+import gg.grounds.domain.ConfigException
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.ext.ExceptionMapper
 import jakarta.ws.rs.ext.Provider
@@ -24,33 +24,28 @@ class ForbiddenMapper : ExceptionMapper<ForbiddenException> {
 }
 
 /**
- * The document services signal failure with gRPC statuses, because that is what they were written
- * against and both facades call them unchanged. Translating here rather than rewriting them is
- * deliberate: a REST layer that re-derived "this key already exists" would be a second opinion on a
- * rule, and the two would eventually disagree.
- *
- * This mapper is the seam. It goes when the services stop throwing `StatusRuntimeException`, which
- * is the last thing gRPC leaves behind here.
+ * The document services raise [ConfigException] and the resources translate nothing: a REST layer
+ * that re-derived "this key already exists" would be a second opinion on a rule, and the two would
+ * eventually disagree. The mapping from a refusal to a status code lives here and nowhere else.
  */
 @Provider
-class GrpcStatusMapper : ExceptionMapper<StatusRuntimeException> {
-    override fun toResponse(exception: StatusRuntimeException): Response {
-        val detail = exception.status.description
-        return when (exception.status.code) {
-            Status.Code.INVALID_ARGUMENT ->
-                problem(400, "Invalid request", detail, "invalid_request")
-            Status.Code.UNAUTHENTICATED ->
-                problem(401, "Unauthenticated", detail, "unauthenticated")
-            Status.Code.PERMISSION_DENIED -> problem(403, "Forbidden", detail, "forbidden")
-            Status.Code.NOT_FOUND -> problem(404, "Not found", detail, "not_found")
-            Status.Code.ALREADY_EXISTS -> problem(409, "Already exists", detail, "already_exists")
+class ConfigExceptionMapper : ExceptionMapper<ConfigException> {
+    override fun toResponse(exception: ConfigException): Response =
+        when (exception.code) {
+            ConfigErrorCode.INVALID_ARGUMENT ->
+                problem(400, "Invalid request", exception.message, "invalid_request")
+            ConfigErrorCode.PERMISSION_DENIED ->
+                problem(403, "Forbidden", exception.message, "forbidden")
+            ConfigErrorCode.NOT_FOUND -> problem(404, "Not found", exception.message, "not_found")
+            ConfigErrorCode.ALREADY_EXISTS ->
+                problem(409, "Already exists", exception.message, "already_exists")
             // The document moved under the caller: they sent an expectedVersion that is no longer
             // current. 409 rather than 412, because the precondition is in the body, not a header.
-            Status.Code.FAILED_PRECONDITION ->
-                problem(409, "Version conflict", detail, "version_conflict")
-            else -> problem(500, "Internal error", detail, "internal")
+            ConfigErrorCode.VERSION_CONFLICT ->
+                problem(409, "Version conflict", exception.message, "version_conflict")
+            ConfigErrorCode.INTERNAL ->
+                problem(500, "Internal error", exception.message, "internal")
         }
-    }
 }
 
 internal fun problem(status: Int, title: String, detail: String?, code: String): Response =

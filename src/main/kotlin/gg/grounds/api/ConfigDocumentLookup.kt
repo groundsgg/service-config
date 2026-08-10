@@ -1,8 +1,9 @@
 package gg.grounds.api
 
+import gg.grounds.domain.ConfigErrorCode
+import gg.grounds.domain.ConfigException
 import gg.grounds.grpc.config.GetDocumentResponse
 import gg.grounds.persistence.ConfigDocumentRepository
-import io.grpc.Status
 
 object ConfigDocumentLookup {
     fun getDocumentResponse(
@@ -17,10 +18,10 @@ object ConfigDocumentLookup {
                 context.configKey,
             )
         if (document == null) {
-            throw Status.NOT_FOUND.withDescription(
-                    "Config document not found (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})"
-                )
-                .asRuntimeException()
+            throw ConfigException(
+                ConfigErrorCode.NOT_FOUND,
+                "Config document not found (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})",
+            )
         }
         return GetDocumentResponse.newBuilder()
             .setDocument(ConfigProtoMapper.toProto(document))
