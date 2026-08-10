@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/groundsgg/service-config/compare/v0.7.0...v0.8.0) (2026-08-10)
+
+
+### Features
+
+* **api:** serve config over REST alongside gRPC ([#48](https://github.com/groundsgg/service-config/issues/48)) ([58333c3](https://github.com/groundsgg/service-config/commit/58333c37376b1bdcfbb66f18a115dcc25bb27234))
+
 ## [0.7.0](https://github.com/groundsgg/service-config/compare/v0.6.0...v0.7.0) (2026-08-04)
 
 
