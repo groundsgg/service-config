@@ -54,6 +54,13 @@ class ConfigWritePolicy(
             .asRuntimeException()
     }
 
+    /**
+     * May [subject] write [app]? Admins may write anything; a scoped writer only the app it was
+     * named with. Transport-free, so the HTTP resources and the gRPC facade cannot drift.
+     */
+    fun mayWriteAs(subject: String, app: String): Boolean =
+        AuthGuard.isAdminSubject(subject) || mayWrite(subject, app)
+
     /** Visible for testing. */
     internal fun mayWrite(subject: String, app: String): Boolean =
         writers.any { (suffix, allowedApp) -> subject.endsWith(suffix) && allowedApp == app }

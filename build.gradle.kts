@@ -16,9 +16,40 @@ repositories {
     }
 }
 
+// The OpenAPI snapshot published to groundsgg/api-reference. Quarkus appends to
+// whatever is already in build/generated/openapi, so a stale file would ship
+// endpoints that no longer exist; clearing first makes the snapshot a statement
+// about this commit.
+val cleanProductionOpenApi =
+    tasks.register<Delete>("cleanProductionOpenApi") {
+        delete(layout.buildDirectory.dir("generated/openapi"))
+        delete(layout.buildDirectory.dir("quarkus"))
+        delete(layout.buildDirectory.dir("quarkus-app"))
+        delete(layout.buildDirectory.dir("quarkus-build"))
+    }
+
+tasks
+    .matching { it.name.startsWith("quarkus") }
+    .configureEach { mustRunAfter(cleanProductionOpenApi) }
+
+tasks.register<Copy>("generateOpenApiSnapshot") {
+    group = "documentation"
+    dependsOn(cleanProductionOpenApi, tasks.named("quarkusBuild"))
+    from(layout.buildDirectory.file("generated/openapi/openapi.json"))
+    into(layout.buildDirectory.dir("api-reference"))
+    rename { "openapi.json" }
+}
+
 dependencies {
     implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.38.0"))
     implementation("io.quarkus:quarkus-arc")
+    // The public API. gRPC is still served alongside it while plugin-config and
+    // plugin-proxy migrate; `quarkus.grpc.server.use-separate-server=false` puts
+    // both on 9000, so serving them together needs no chart or Service change.
+    implementation("io.quarkus:quarkus-rest")
+    implementation("io.quarkus:quarkus-rest-jackson")
+    implementation("io.quarkus:quarkus-smallrye-openapi")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("io.quarkus:quarkus-grpc")
     implementation("io.quarkus:quarkus-jackson")
     implementation("io.quarkus:quarkus-jdbc-postgresql")
