@@ -1,7 +1,7 @@
 plugins {
     id("gg.grounds.root") version "0.1.1"
     id("gg.grounds.push") version "0.13.0"
-    id("io.quarkus") version "3.38.0"
+    id("io.quarkus") version "3.38.1"
 }
 
 repositories {
