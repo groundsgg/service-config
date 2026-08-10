@@ -1,6 +1,38 @@
 # service-config
 
-gRPC service for reading and mutating configuration documents stored in Postgres.
+Service for reading and mutating configuration documents stored in Postgres.
+
+## API
+
+REST under `/v1/config`, documented by an OpenAPI snapshot published to
+[groundsgg/api-reference](https://github.com/groundsgg/api-reference) on every
+release. Rendering stays central — this service serves no Swagger UI of its own.
+
+```bash
+./gradlew generateOpenApiSnapshot   # -> build/api-reference/openapi.json
+```
+
+A snapshot carries its version as an `ETag`. Send it back as `If-None-Match` and
+an unchanged snapshot answers `304` with no body — that is the HTTP spelling of
+`GetSnapshotIfNewer`, and the two RPCs are one endpoint because of it.
+
+### Retiring gRPC
+
+`ConfigService` and `ConfigAdminService` are still served on the same port,
+because `plugin-config` and `plugin-proxy` still dial the stubs. Both facades
+call the same `ConfigDocumentApiService` and `ConfigAdminDocumentService`, so
+they cannot drift. The order matters:
+
+1. Release this service. It now answers on both transports.
+2. Move `plugin-config` and `plugin-proxy` to HTTP, and roll the proxies —
+   Velocity loads plugin jars at startup, so a `rollout restart` is part of the
+   step.
+3. Delete `gg.grounds.api.Config*GrpcService`, `GroundsAuthInterceptor`,
+   `AuthContext`, the `quarkus-grpc` dependency and the
+   `library-grpc-contracts-config` dependency. What is left after that is the
+   document services still raising `io.grpc.Status` exceptions, which
+   `GrpcStatusMapper` translates; replacing those with domain errors is the last
+   step, and nothing depends on it.
 
 ## Change Delivery
 
@@ -11,13 +43,14 @@ best-effort latency optimization, not a durable source of truth.
 - If the pod crashes after the commit or NATS is unavailable, the database state is still correct
   and the change event can be missed.
 - Consumers must treat the NATS payload as a refresh trigger only and fetch state through
-  `GetSnapshotIfNewer` before applying changes locally.
-- Config consumers must treat `GetSnapshotIfNewer` snapshot polling as the reconciliation path and
-  source of truth for cache correctness.
+  the snapshot endpoint with `If-None-Match` before applying changes locally.
+- Config consumers must treat conditional snapshot polling as the reconciliation path and source
+  of truth for cache correctness.
 
 ## Security
 
-Every gRPC call is authenticated: `GroundsAuthInterceptor` verifies the caller's projected
+Every call is authenticated on both transports against the same
+`WorkloadAuthenticator`: `GroundsAuthInterceptor` and `WorkloadAuthFilter` verify the caller's projected
 ServiceAccount JWT against the cluster's JWKS and requires audience `grounds-services`. Set
 `GROUNDS_AUTH_ENABLED=false` for local dev, where no token is projected.
 

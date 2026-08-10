@@ -41,7 +41,10 @@ object AuthGuard {
         }
     }
 
-    /** Visible for testing. */
-    internal fun isAdminSubject(subject: String): Boolean =
-        ADMIN_SA_SUFFIXES.any { subject.endsWith(it) }
+    /**
+     * The decision itself, taking the subject rather than reading it out of a transport. The HTTP
+     * layer asks this holding the caller's identity from the request's SecurityContext; [isAdmin]
+     * above is the same question asked through a gRPC Context.
+     */
+    fun isAdminSubject(subject: String): Boolean = ADMIN_SA_SUFFIXES.any { subject.endsWith(it) }
 }
