@@ -41,7 +41,7 @@ tasks.register<Copy>("generateOpenApiSnapshot") {
 }
 
 dependencies {
-    implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.38.0"))
+    implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.38.1"))
     implementation("io.quarkus:quarkus-arc")
     // The public API. HTTP is the only transport now.
     implementation("io.quarkus:quarkus-rest")
