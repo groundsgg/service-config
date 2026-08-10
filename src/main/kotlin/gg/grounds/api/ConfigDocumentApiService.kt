@@ -2,6 +2,8 @@ package gg.grounds.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import gg.grounds.domain.ConfigDocument
+import gg.grounds.domain.ConfigErrorCode
+import gg.grounds.domain.ConfigException
 import gg.grounds.events.ConfigChangePublisher
 import gg.grounds.grpc.config.ConfigDocumentKey
 import gg.grounds.grpc.config.GetDocumentRequest
@@ -115,10 +117,10 @@ constructor(
         try {
             objectMapper.readTree(contentJson)
         } catch (_: Exception) {
-            throw io.grpc.Status.INVALID_ARGUMENT.withDescription(
-                    "defaultContentJson must be valid JSON"
-                )
-                .asRuntimeException()
+            throw ConfigException(
+                ConfigErrorCode.INVALID_ARGUMENT,
+                "defaultContentJson must be valid JSON",
+            )
         }
     }
 

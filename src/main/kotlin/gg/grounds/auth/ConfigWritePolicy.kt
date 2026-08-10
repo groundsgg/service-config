@@ -1,6 +1,5 @@
 package gg.grounds.auth
 
-import io.grpc.Status
 import jakarta.enterprise.context.ApplicationScoped
 import org.eclipse.microprofile.config.inject.ConfigProperty
 import org.jboss.logging.Logger
@@ -38,25 +37,8 @@ class ConfigWritePolicy(
     private val writers: Map<String, String> by lazy { parse(configured) }
 
     /**
-     * Throws PERMISSION_DENIED unless the caller may write [app].
-     *
-     * Admins pass for any app. A scoped writer passes only for the app it was named with — the
-     * proxy that may set the MOTD may not rewrite `service-player`'s configuration.
-     */
-    fun requireWrite(app: String, operation: String) {
-        if (AuthGuard.isAdmin()) return
-        val subject = AuthContext.current()?.subject
-        if (subject != null && mayWrite(subject, app)) return
-        throw Status.PERMISSION_DENIED.withDescription(
-                "$operation on app '$app' requires admin or a configured writer " +
-                    "(caller=${subject ?: "<no-auth>"})"
-            )
-            .asRuntimeException()
-    }
-
-    /**
      * May [subject] write [app]? Admins may write anything; a scoped writer only the app it was
-     * named with. Transport-free, so the HTTP resources and the gRPC facade cannot drift.
+     * named with.
      */
     fun mayWriteAs(subject: String, app: String): Boolean =
         AuthGuard.isAdminSubject(subject) || mayWrite(subject, app)

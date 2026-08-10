@@ -16,23 +16,16 @@ A snapshot carries its version as an `ETag`. Send it back as `If-None-Match` and
 an unchanged snapshot answers `304` with no body — that is the HTTP spelling of
 `GetSnapshotIfNewer`, and the two RPCs are one endpoint because of it.
 
-### Retiring gRPC
+HTTP is the only transport. The `ConfigService` and `ConfigAdminService` gRPC
+surfaces were removed once plugin-config 1.0.0 and plugin-proxy 2.0.0 had moved
+to REST and the proxies had been rolled onto those jars.
 
-`ConfigService` and `ConfigAdminService` are still served on the same port,
-because `plugin-config` and `plugin-proxy` still dial the stubs. Both facades
-call the same `ConfigDocumentApiService` and `ConfigAdminDocumentService`, so
-they cannot drift. The order matters:
-
-1. Release this service. It now answers on both transports.
-2. Move `plugin-config` and `plugin-proxy` to HTTP, and roll the proxies —
-   Velocity loads plugin jars at startup, so a `rollout restart` is part of the
-   step.
-3. Delete `gg.grounds.api.Config*GrpcService`, `GroundsAuthInterceptor`,
-   `AuthContext`, the `quarkus-grpc` dependency and the
-   `library-grpc-contracts-config` dependency. What is left after that is the
-   document services still raising `io.grpc.Status` exceptions, which
-   `GrpcStatusMapper` translates; replacing those with domain errors is the last
-   step, and nothing depends on it.
+One thing gRPC left behind: `quarkus-grpc` is still on the classpath, because it
+owns the protoc codegen and the document services still pass the generated
+messages around as internal request/response types. Giving them domain types is
+what removes the extension, the `library-grpc-contracts-config` dependency and
+the `scan-for-proto` line — a refactor of the write paths, worth doing on its
+own rather than alongside a transport removal.
 
 ## Change Delivery
 

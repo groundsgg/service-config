@@ -1,9 +1,9 @@
 package gg.grounds.api
 
 import gg.grounds.domain.ConfigDocument
+import gg.grounds.domain.ConfigErrorCode
+import gg.grounds.domain.ConfigException
 import gg.grounds.persistence.ConfigDocumentRepository
-import io.grpc.Status
-import io.grpc.StatusRuntimeException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -18,7 +18,7 @@ class ConfigDocumentLookupTest {
         whenever(repository.findOne("player", "prod", "feature-flags", "new-ui")).thenReturn(null)
 
         val thrown =
-            assertThrows(StatusRuntimeException::class.java) {
+            assertThrows(ConfigException::class.java) {
                 ConfigDocumentLookup.getDocumentResponse(
                     repository,
                     ConfigRequestContexts.toDocumentContext(
@@ -30,10 +30,10 @@ class ConfigDocumentLookupTest {
                 )
             }
 
-        assertEquals(Status.Code.NOT_FOUND, thrown.status.code)
+        assertEquals(ConfigErrorCode.NOT_FOUND, thrown.code)
         assertEquals(
             "Config document not found (app=player, env=prod, namespace=feature-flags, configKey=new-ui)",
-            thrown.status.description,
+            thrown.message,
         )
     }
 

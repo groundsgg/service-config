@@ -43,13 +43,16 @@ tasks.register<Copy>("generateOpenApiSnapshot") {
 dependencies {
     implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.38.0"))
     implementation("io.quarkus:quarkus-arc")
-    // The public API. gRPC is still served alongside it while plugin-config and
-    // plugin-proxy migrate; `quarkus.grpc.server.use-separate-server=false` puts
-    // both on 9000, so serving them together needs no chart or Service change.
+    // The public API. HTTP is the only transport now.
     implementation("io.quarkus:quarkus-rest")
     implementation("io.quarkus:quarkus-rest-jackson")
     implementation("io.quarkus:quarkus-smallrye-openapi")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    // No gRPC is served any more. The extension stays only because it owns the
+    // protoc codegen behind `quarkus.generate-code.grpc.scan-for-proto`, and the
+    // document services still pass the generated messages around as internal
+    // request/response types. Both go when those take domain types instead —
+    // a refactor of the write paths, and worth doing on its own.
     implementation("io.quarkus:quarkus-grpc")
     implementation("io.quarkus:quarkus-jackson")
     implementation("io.quarkus:quarkus-jdbc-postgresql")

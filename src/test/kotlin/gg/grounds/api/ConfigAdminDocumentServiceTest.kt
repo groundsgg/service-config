@@ -1,13 +1,13 @@
 package gg.grounds.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import gg.grounds.domain.ConfigErrorCode
+import gg.grounds.domain.ConfigException
 import gg.grounds.events.ConfigChangePublisher
 import gg.grounds.grpc.config.CreateDocumentRequest
 import gg.grounds.grpc.config.DeleteDocumentRequest
 import gg.grounds.grpc.config.PutDocumentRequest
 import gg.grounds.persistence.ConfigDocumentRepository
-import io.grpc.Status
-import io.grpc.StatusRuntimeException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -37,13 +37,12 @@ class ConfigAdminDocumentServiceTest {
                 .setContentJson("{}")
                 .build()
 
-        val thrown =
-            assertThrows(StatusRuntimeException::class.java) { service.createDocument(request) }
+        val thrown = assertThrows(ConfigException::class.java) { service.createDocument(request) }
 
-        assertEquals(Status.Code.ALREADY_EXISTS, thrown.status.code)
+        assertEquals(ConfigErrorCode.ALREADY_EXISTS, thrown.code)
         assertEquals(
             "Config document already exists (app=player, env=prod, namespace=feature-flags, configKey=new-ui, currentVersion=5)",
-            thrown.status.description,
+            thrown.message,
         )
     }
 
@@ -58,11 +57,10 @@ class ConfigAdminDocumentServiceTest {
                 .setContentJson("{invalid")
                 .build()
 
-        val thrown =
-            assertThrows(StatusRuntimeException::class.java) { service.putDocument(request) }
+        val thrown = assertThrows(ConfigException::class.java) { service.putDocument(request) }
 
-        assertEquals(Status.Code.INVALID_ARGUMENT, thrown.status.code)
-        assertEquals("contentJson must be valid JSON", thrown.status.description)
+        assertEquals(ConfigErrorCode.INVALID_ARGUMENT, thrown.code)
+        assertEquals("contentJson must be valid JSON", thrown.message)
         verifyNoInteractions(repository)
     }
 
@@ -83,13 +81,12 @@ class ConfigAdminDocumentServiceTest {
                 .setExpectedVersion(3L)
                 .build()
 
-        val thrown =
-            assertThrows(StatusRuntimeException::class.java) { service.putDocument(request) }
+        val thrown = assertThrows(ConfigException::class.java) { service.putDocument(request) }
 
-        assertEquals(Status.Code.FAILED_PRECONDITION, thrown.status.code)
+        assertEquals(ConfigErrorCode.VERSION_CONFLICT, thrown.code)
         assertEquals(
             "Config document version mismatch (app=player, env=prod, namespace=feature-flags, configKey=new-ui, expectedVersion=3, currentVersion=4)",
-            thrown.status.description,
+            thrown.message,
         )
     }
 
@@ -105,13 +102,12 @@ class ConfigAdminDocumentServiceTest {
                 .setExpectedVersion(0L)
                 .build()
 
-        val thrown =
-            assertThrows(StatusRuntimeException::class.java) { service.putDocument(request) }
+        val thrown = assertThrows(ConfigException::class.java) { service.putDocument(request) }
 
-        assertEquals(Status.Code.INVALID_ARGUMENT, thrown.status.code)
+        assertEquals(ConfigErrorCode.INVALID_ARGUMENT, thrown.code)
         assertEquals(
             "expectedVersion must be greater than 0 when provided; use CreateDocument for create-if-absent semantics",
-            thrown.status.description,
+            thrown.message,
         )
     }
 
@@ -130,13 +126,12 @@ class ConfigAdminDocumentServiceTest {
                 .setExpectedVersion(3L)
                 .build()
 
-        val thrown =
-            assertThrows(StatusRuntimeException::class.java) { service.putDocument(request) }
+        val thrown = assertThrows(ConfigException::class.java) { service.putDocument(request) }
 
-        assertEquals(Status.Code.NOT_FOUND, thrown.status.code)
+        assertEquals(ConfigErrorCode.NOT_FOUND, thrown.code)
         assertEquals(
             "Config document not found (app=player, env=prod, namespace=feature-flags, configKey=new-ui, expectedVersion=3)",
-            thrown.status.description,
+            thrown.message,
         )
     }
 

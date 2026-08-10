@@ -2,6 +2,8 @@ package gg.grounds.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import gg.grounds.domain.ConfigDocument
+import gg.grounds.domain.ConfigErrorCode
+import gg.grounds.domain.ConfigException
 import gg.grounds.events.ConfigChangePublisher
 import gg.grounds.grpc.config.CreateDocumentRequest
 import gg.grounds.grpc.config.CreateDocumentResponse
@@ -13,7 +15,6 @@ import gg.grounds.grpc.config.ListDocumentsResponse
 import gg.grounds.grpc.config.PutDocumentRequest
 import gg.grounds.grpc.config.PutDocumentResponse
 import gg.grounds.persistence.ConfigDocumentRepository
-import io.grpc.Status
 import jakarta.enterprise.context.ApplicationScoped
 import jakarta.inject.Inject
 import org.jboss.logging.Logger
@@ -80,10 +81,10 @@ constructor(
                 is ConfigDocumentRepository.CreateAndIncrementVersionResult.Created ->
                     result.version
                 is ConfigDocumentRepository.CreateAndIncrementVersionResult.AlreadyExists -> {
-                    throw Status.ALREADY_EXISTS.withDescription(
-                            "Config document already exists (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, currentVersion=${result.currentDocumentVersion})"
-                        )
-                        .asRuntimeException()
+                    throw ConfigException(
+                        ConfigErrorCode.ALREADY_EXISTS,
+                        "Config document already exists (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, currentVersion=${result.currentDocumentVersion})",
+                    )
                 }
                 is ConfigDocumentRepository.CreateAndIncrementVersionResult.Failed -> {
                     LOG.errorf(
@@ -94,10 +95,10 @@ constructor(
                         context.namespace,
                         context.configKey,
                     )
-                    throw Status.INTERNAL.withDescription(
-                            "Failed to create config document (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})"
-                        )
-                        .asRuntimeException()
+                    throw ConfigException(
+                        ConfigErrorCode.INTERNAL,
+                        "Failed to create config document (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})",
+                    )
                 }
             }
         val changePublishResult =
@@ -149,16 +150,16 @@ constructor(
                 is ConfigDocumentRepository.UpsertAndIncrementVersionResult.Updated ->
                     result.version
                 is ConfigDocumentRepository.UpsertAndIncrementVersionResult.PreconditionFailed -> {
-                    throw Status.FAILED_PRECONDITION.withDescription(
-                            "Config document version mismatch (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, expectedVersion=$expectedVersion, currentVersion=${result.currentDocumentVersion})"
-                        )
-                        .asRuntimeException()
+                    throw ConfigException(
+                        ConfigErrorCode.VERSION_CONFLICT,
+                        "Config document version mismatch (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, expectedVersion=$expectedVersion, currentVersion=${result.currentDocumentVersion})",
+                    )
                 }
                 ConfigDocumentRepository.UpsertAndIncrementVersionResult.NotFound -> {
-                    throw Status.NOT_FOUND.withDescription(
-                            "Config document not found (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, expectedVersion=$expectedVersion)"
-                        )
-                        .asRuntimeException()
+                    throw ConfigException(
+                        ConfigErrorCode.NOT_FOUND,
+                        "Config document not found (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey}, expectedVersion=$expectedVersion)",
+                    )
                 }
                 is ConfigDocumentRepository.UpsertAndIncrementVersionResult.Failed -> {
                     LOG.errorf(
@@ -169,10 +170,10 @@ constructor(
                         context.namespace,
                         context.configKey,
                     )
-                    throw Status.INTERNAL.withDescription(
-                            "Failed to put config document (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})"
-                        )
-                        .asRuntimeException()
+                    throw ConfigException(
+                        ConfigErrorCode.INTERNAL,
+                        "Failed to put config document (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})",
+                    )
                 }
             }
         // NATS notifications are best-effort. Consumers must reconcile via GetSnapshotIfNewer
@@ -264,20 +265,20 @@ constructor(
                     context.namespace,
                     context.configKey,
                 )
-                throw Status.INTERNAL.withDescription(
-                        "Failed to delete config document (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})"
-                    )
-                    .asRuntimeException()
+                throw ConfigException(
+                    ConfigErrorCode.INTERNAL,
+                    "Failed to delete config document (app=${context.app}, env=${context.env}, namespace=${context.namespace}, configKey=${context.configKey})",
+                )
             }
         }
     }
 
     private fun validateExpectedVersion(request: PutDocumentRequest) {
         if (request.hasExpectedVersion() && request.expectedVersion <= 0L) {
-            throw Status.INVALID_ARGUMENT.withDescription(
-                    "expectedVersion must be greater than 0 when provided; use CreateDocument for create-if-absent semantics"
-                )
-                .asRuntimeException()
+            throw ConfigException(
+                ConfigErrorCode.INVALID_ARGUMENT,
+                "expectedVersion must be greater than 0 when provided; use CreateDocument for create-if-absent semantics",
+            )
         }
     }
 
@@ -285,8 +286,10 @@ constructor(
         try {
             objectMapper.readTree(contentJson)
         } catch (_: Exception) {
-            throw Status.INVALID_ARGUMENT.withDescription("contentJson must be valid JSON")
-                .asRuntimeException()
+            throw ConfigException(
+                ConfigErrorCode.INVALID_ARGUMENT,
+                "contentJson must be valid JSON",
+            )
         }
     }
 

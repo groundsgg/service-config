@@ -1,6 +1,7 @@
 package gg.grounds.api
 
-import io.grpc.Status
+import gg.grounds.domain.ConfigErrorCode
+import gg.grounds.domain.ConfigException
 
 object ConfigRequestContexts {
     data class AppEnvContext(val app: String, val env: String)
@@ -73,7 +74,7 @@ object ConfigRequestContexts {
     }
 
     private fun invalidArgument(message: String) =
-        Status.INVALID_ARGUMENT.withDescription(message).asRuntimeException()
+        ConfigException(ConfigErrorCode.INVALID_ARGUMENT, message)
 
     private val SEGMENT_PATTERN = Regex("[A-Za-z0-9_-]+")
     private const val SEGMENT_PATTERN_DESCRIPTION = "[A-Za-z0-9_-]+"
