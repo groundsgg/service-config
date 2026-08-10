@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/groundsgg/service-config/compare/v0.8.0...v1.0.0) (2026-08-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** drop the ConfigService and ConfigAdminService gRPC surfaces ([#50](https://github.com/groundsgg/service-config/issues/50))
+
+### Features
+
+* **api:** drop the ConfigService and ConfigAdminService gRPC surfaces ([#50](https://github.com/groundsgg/service-config/issues/50)) ([50f410b](https://github.com/groundsgg/service-config/commit/50f410bed6836a8975c5df202a59a09ab3b7a599))
+
 ## [0.8.0](https://github.com/groundsgg/service-config/compare/v0.7.0...v0.8.0) (2026-08-10)
 
 
