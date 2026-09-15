@@ -25,6 +25,34 @@ class ConfigDocumentRepositoryTest {
     private val repository = createRepository(dataSource)
 
     @Test
+    fun `upsert consumes the returning row instead of executing an update`() {
+        val writeDataSource: DataSource = mock()
+        val writeConnection: Connection = mock()
+        val writeStatement: PreparedStatement = mock()
+        val returningRow: ResultSet = mock()
+        val writeRepository = createRepository(writeDataSource)
+        val document =
+            ConfigDocument(
+                app = "player",
+                env = "prod",
+                namespace = "feature-flags",
+                configKey = "new-ui",
+                contentJson = "{}",
+                updatedBy = "tester",
+            )
+        whenever(writeDataSource.connection).thenReturn(writeConnection)
+        whenever(writeConnection.prepareStatement(any())).thenReturn(writeStatement)
+        whenever(writeStatement.executeQuery()).thenReturn(returningRow)
+        whenever(returningRow.next()).thenReturn(true)
+
+        assertTrue(writeRepository.upsert(document))
+
+        verify(writeStatement).executeQuery()
+        verify(writeStatement, never()).executeUpdate()
+        verify(returningRow).close()
+    }
+
+    @Test
     fun `findAll rethrows SQLException when read fails`() {
         val sqlError = SQLException("database unavailable")
         whenever(dataSource.connection).thenThrow(sqlError)

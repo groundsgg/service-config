@@ -22,7 +22,7 @@ constructor(private val dataSource: DataSource) {
                     statement.setString(4, document.configKey)
                     statement.setString(5, document.contentJson)
                     statement.setString(6, document.updatedBy)
-                    statement.executeUpdate() > 0
+                    statement.executeQuery().use { resultSet -> resultSet.next() }
                 }
             }
         } catch (error: SQLException) {
