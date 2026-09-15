@@ -53,27 +53,28 @@ Authorization on top of that:
 |---|---|
 | `ConfigService` (reads, `SyncDefaults`) | any authenticated caller |
 | `ConfigAdminService.ListDocuments` / `GetDocument` / `CreateDocument` | admins only |
-| `ConfigAdminService.PutDocument` / `DeleteDocument` | admins, **plus** a writer named for that app |
+| `ConfigAdminService.PutDocument` / `DeleteDocument` | admins, **plus** a writer named for that app or exact document |
 
 An admin is a caller whose JWT `sub` ends in `:platform-admin` or `:config-admin` — ops creates
 those ServiceAccounts by hand, and their existence is the grant (`AuthGuard`).
 
-`GROUNDS_CONFIG_WRITERS` names callers that may replace or delete documents of **one** app without
-being admins, as `<subject-suffix>=<app>`:
+`GROUNDS_CONFIG_WRITERS` names callers that may replace or delete documents without being admins.
+The legacy `<subject-suffix>=<app>` grant authorizes every document in that app; prefer the
+least-privilege exact form `<subject-suffix>=<app>/<env>/<namespace>/<configKey>` for a service
+that owns one document:
 
 ```
-GROUNDS_CONFIG_WRITERS=":velocity=velocity,:velocity-2=velocity"
+GROUNDS_CONFIG_WRITERS=":forge=network/stage/resourcepacks/global"
 ```
 
-This is how a service owns its own configuration — the Velocity proxies write the network MOTD —
-without being handed every other app's along with it. A pod cannot opt into being an admin for one
-call: a projected token always carries the pod's own ServiceAccount, so making the proxies
-`config-admin` would be the only alternative, and that grants far more than the one document.
+This is how a service owns its own configuration without being handed every other app's or document
+along with it. A pod cannot opt into being an admin for one call: a projected token always carries
+the pod's own ServiceAccount, so making the service `config-admin` would be the only alternative,
+and that grants far more than one document.
 
-Suffix matching is namespace-agnostic, deliberately and exactly like the admin rule: the same
-deployment exists in every region, and pinning the namespace would mean an entry per region that
-nobody would keep in step. Two entries above rather than one because the two proxy releases run
-under two ServiceAccounts and share a single document.
+Subject suffix matching is namespace-agnostic, deliberately and exactly like the admin rule: the
+same deployment exists in every region. The exact grant itself pins app, environment, namespace and
+key. Malformed grants are ignored rather than becoming broader app grants.
 
 Unset (the default) means admin-only. Creating stays admin-only in every case: which documents exist
 in an app is a shape decision, and `PutDocument` is already the create-or-replace path a

@@ -1,6 +1,7 @@
 package gg.grounds.rest
 
 import gg.grounds.api.ConfigAdminDocumentService
+import gg.grounds.api.ConfigRequestContexts
 import gg.grounds.auth.AuthGuard
 import gg.grounds.auth.ConfigWritePolicy
 import gg.grounds.grpc.config.CreateDocumentRequest
@@ -31,9 +32,9 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag
  *
  * Two different grants, on purpose. Browsing and creating are admin-only: seeing every app's
  * configuration is an operator's job, and *which* documents exist in an app is a shape decision.
- * Replacing and deleting one document additionally accept a writer named for that app — which is
- * what lets the proxies own the network MOTD without being handed every other app's configuration
- * along with it.
+ * Replacing and deleting one document additionally accept a writer named for that app or exact
+ * document — which lets a service own one document without being handed every other app's
+ * configuration along with it.
  *
  * The decisions themselves live in [AuthGuard] and [ConfigWritePolicy], taking the subject this
  * resource reads off the request; the gRPC facade asks the same functions through a gRPC Context.
@@ -137,7 +138,7 @@ constructor(
     @Operation(
         summary = "Create or replace a document",
         description =
-            "Admin, or a writer named for this app. Send `expectedVersion` to make the write " +
+            "Admin, an app writer, or an exact-document writer. Send `expectedVersion` to make the write " +
                 "conditional — a mismatch answers 409 rather than quietly overwriting somebody " +
                 "else's change.",
     )
@@ -150,15 +151,21 @@ constructor(
         body: PutDocumentBody?,
         @Context security: SecurityContext,
     ): WriteResultResponse {
-        val appId = required(app, "app")
-        requireWrite(security, appId, "replace document")
+        val context =
+            ConfigRequestContexts.toDocumentContext(
+                required(app, "app"),
+                required(env, "env"),
+                required(namespace, "namespace"),
+                required(configKey, "configKey"),
+            )
+        requireWrite(security, context, "replace document")
         val payload = body ?: throw InvalidRequestException("A request body is required.")
         val builder =
             PutDocumentRequest.newBuilder()
-                .setApp(appId)
-                .setEnv(required(env, "env"))
-                .setNamespace(required(namespace, "namespace"))
-                .setConfigKey(required(configKey, "configKey"))
+                .setApp(context.app)
+                .setEnv(context.env)
+                .setNamespace(context.namespace)
+                .setConfigKey(context.configKey)
                 .setContentJson(required(payload.contentJson, "contentJson"))
                 .setUpdatedBy(payload.updatedBy ?: subjectOf(security))
         payload.expectedVersion?.let { builder.expectedVersion = it }
@@ -169,7 +176,7 @@ constructor(
     @Path("/namespaces/{namespace}/documents/{configKey}")
     @Operation(
         summary = "Delete a document",
-        description = "Admin, or a writer named for this app.",
+        description = "Admin, an app writer, or an exact-document writer.",
     )
     fun delete(
         @PathParam("app") app: String?,
@@ -178,15 +185,21 @@ constructor(
         @PathParam("configKey") configKey: String?,
         @Context security: SecurityContext,
     ): DeleteResultResponse {
-        val appId = required(app, "app")
-        requireWrite(security, appId, "delete document")
+        val context =
+            ConfigRequestContexts.toDocumentContext(
+                required(app, "app"),
+                required(env, "env"),
+                required(namespace, "namespace"),
+                required(configKey, "configKey"),
+            )
+        requireWrite(security, context, "delete document")
         val response =
             service.deleteDocument(
                 DeleteDocumentRequest.newBuilder()
-                    .setApp(appId)
-                    .setEnv(required(env, "env"))
-                    .setNamespace(required(namespace, "namespace"))
-                    .setConfigKey(required(configKey, "configKey"))
+                    .setApp(context.app)
+                    .setEnv(context.env)
+                    .setNamespace(context.namespace)
+                    .setConfigKey(context.configKey)
                     .setDeletedBy(subjectOf(security))
                     .build()
             )
@@ -200,11 +213,15 @@ constructor(
         }
     }
 
-    private fun requireWrite(security: SecurityContext, app: String, operation: String) {
+    private fun requireWrite(
+        security: SecurityContext,
+        document: ConfigRequestContexts.DocumentContext,
+        operation: String,
+    ) {
         val subject = subjectOf(security)
-        if (!writePolicy.mayWriteAs(subject, app)) {
+        if (!writePolicy.mayWriteAs(subject, document)) {
             throw ForbiddenException(
-                "$operation on app '$app' requires admin or a configured writer (caller=$subject)"
+                "$operation on app '${document.app}' requires admin or a configured writer (caller=$subject)"
             )
         }
     }

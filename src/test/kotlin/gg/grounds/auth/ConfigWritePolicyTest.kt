@@ -1,5 +1,6 @@
 package gg.grounds.auth
 
+import gg.grounds.api.ConfigRequestContexts
 import io.smallrye.config.PropertiesConfigSource
 import io.smallrye.config.SmallRyeConfigBuilder
 import java.nio.file.Files
@@ -81,5 +82,78 @@ class ConfigWritePolicyTest {
 
         assertEquals(1, sloppy.writerCount())
         assertTrue(sloppy.mayWrite("system:serviceaccount:stage:velocity", "velocity"))
+    }
+
+    @Test
+    fun `an exact writer may write only its configured document`() {
+        val exact =
+            ConfigWritePolicy(":forge=network/stage/resourcepacks/global")
+        val document =
+            ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global")
+
+        assertTrue(exact.mayWriteAs("system:serviceaccount:games:forge", document))
+        assertFalse(exact.mayWriteAs("system:serviceaccount:games:forge", "network"))
+        assertFalse(
+            exact.mayWriteAs(
+                "system:serviceaccount:games:forge",
+                ConfigRequestContexts.toDocumentContext("other", "stage", "resourcepacks", "global"),
+            )
+        )
+        assertFalse(
+            exact.mayWriteAs(
+                "system:serviceaccount:games:forge",
+                ConfigRequestContexts.toDocumentContext("network", "prod", "resourcepacks", "global"),
+            )
+        )
+        assertFalse(
+            exact.mayWriteAs(
+                "system:serviceaccount:games:forge",
+                ConfigRequestContexts.toDocumentContext("network", "stage", "other", "global"),
+            )
+        )
+        assertFalse(
+            exact.mayWriteAs(
+                "system:serviceaccount:games:forge",
+                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "other"),
+            )
+        )
+    }
+
+    @Test
+    fun `legacy writers and admins retain document write access`() {
+        val legacy = ConfigWritePolicy(":velocity=network")
+        val document =
+            ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global")
+
+        assertTrue(legacy.mayWriteAs("system:serviceaccount:games:velocity", document))
+        assertTrue(
+            legacy.mayWriteAs("system:serviceaccount:platform-admin:config-admin", document)
+        )
+    }
+
+    @Test
+    fun `malformed exact writer entries fail closed and valid duplicate wins last`() {
+        val configured =
+            ":forge=network/stage/resourcepacks/global," +
+                ":two=network/stage,:three=network/stage/resourcepacks," +
+                ":five=network/stage/resourcepacks/global/extra," +
+                ":empty=network//resourcepacks/global," +
+                ":invalid=network/stage/resourcepacks/global!," +
+                ":forge=network/stage/resourcepacks/override"
+        val policy = ConfigWritePolicy(configured)
+
+        assertEquals(1, policy.writerCount())
+        assertFalse(
+            policy.mayWriteAs(
+                "system:serviceaccount:games:forge",
+                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global"),
+            )
+        )
+        assertTrue(
+            policy.mayWriteAs(
+                "system:serviceaccount:games:forge",
+                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "override"),
+            )
+        )
     }
 }
