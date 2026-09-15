@@ -34,12 +34,13 @@
 
 ## Task 2: Lossless document ETags and conditional PUT
 
-**Files:** `src/main/kotlin/gg/grounds/rest/ConfigResource.kt`, `ConfigAdminResource.kt`, a small shared REST helper if needed, focused REST tests, `README.md`.
+**Files:** `src/main/kotlin/gg/grounds/rest/ConfigResource.kt`, `ConfigAdminResource.kt`, `ProblemMappers.kt` (stale explanatory comment only), a small shared REST helper if needed, focused REST tests, `README.md`.
 
 **Interfaces:** Public/admin document GET return `Response.ok(existingDto).tag(etag(document.version))`. PUT appends optional `@HeaderParam("If-Match") ifMatch: String? = null` to preserve direct call sites, returns existing `WriteResultResponse` entity with the successful version tag. Strict parser stays separate from existing lenient snapshot parser. Body version remains supported unchanged; map parsed header to existing `PutDocumentRequest.expectedVersion` and let repository/service enforce concurrency.
 
 - [ ] Add RED tests for both document GET ETags and successful PUT ETag/body preservation, unconditional/body/header paths, mutually exclusive header/body, strong canonical parser rejects, and exact `9007199254740993`/Long.MAX_VALUE transport. Verify stale header CAS maps to existing 409 without retry or alternate write.
 - [ ] Implement minimal Response wrapping and parser. Add accurate OpenAPI operation/header response descriptions using existing annotation conventions; do not alter wire body schemas or snapshot behavior.
+- [ ] Correct the existing VERSION_CONFLICT mapper comment: 409 remains the approved shared body/header API contract, not a claim that all preconditions are in the body. Do not change its status mapping.
 - [ ] Run focused GREEN then `./gradlew test`; record actual evidence, inspect diff and signed-commit only task files. Write Task 2 report, do not spawn reviewers or push/merge yourself.
 
 ## Integration
