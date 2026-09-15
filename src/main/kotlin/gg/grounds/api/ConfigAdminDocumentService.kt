@@ -122,7 +122,14 @@ constructor(
         return CreateDocumentResponse.newBuilder().setVersion(version).build()
     }
 
-    fun putDocument(request: PutDocumentRequest): PutDocumentResponse {
+    data class PutDocumentWithVersionResult(val appVersion: Long, val documentVersion: Long)
+
+    fun putDocument(request: PutDocumentRequest): PutDocumentResponse =
+        putDocumentWithVersion(request).let { result ->
+            PutDocumentResponse.newBuilder().setVersion(result.appVersion).build()
+        }
+
+    fun putDocumentWithVersion(request: PutDocumentRequest): PutDocumentWithVersionResult {
         val context =
             ConfigRequestContexts.toDocumentContext(
                 request.app,
@@ -143,12 +150,11 @@ constructor(
                 updatedBy = updatedBy,
             )
         val expectedVersion = if (request.hasExpectedVersion()) request.expectedVersion else null
-        val version =
+        val versions =
             when (
                 val result = documentRepository.upsertAndIncrementVersion(document, expectedVersion)
             ) {
-                is ConfigDocumentRepository.UpsertAndIncrementVersionResult.Updated ->
-                    result.version
+                is ConfigDocumentRepository.UpsertAndIncrementVersionResult.Updated -> result
                 is ConfigDocumentRepository.UpsertAndIncrementVersionResult.PreconditionFailed -> {
                     throw ConfigException(
                         ConfigErrorCode.VERSION_CONFLICT,
@@ -182,7 +188,7 @@ constructor(
             changePublisher.publishChange(
                 context.app,
                 context.env,
-                version,
+                versions.version,
                 context.namespace,
                 context.configKey,
             )
@@ -192,11 +198,11 @@ constructor(
             context.env,
             context.namespace,
             context.configKey,
-            version,
+            versions.version,
             updatedBy,
             changePublishResult.name.lowercase(),
         )
-        return PutDocumentResponse.newBuilder().setVersion(version).build()
+        return PutDocumentWithVersionResult(versions.version, versions.documentVersion)
     }
 
     fun deleteDocument(request: DeleteDocumentRequest): DeleteDocumentResponse {

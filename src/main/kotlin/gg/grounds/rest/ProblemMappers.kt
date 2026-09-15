@@ -39,8 +39,8 @@ class ConfigExceptionMapper : ExceptionMapper<ConfigException> {
             ConfigErrorCode.NOT_FOUND -> problem(404, "Not found", exception.message, "not_found")
             ConfigErrorCode.ALREADY_EXISTS ->
                 problem(409, "Already exists", exception.message, "already_exists")
-            // The document moved under the caller: they sent an expectedVersion that is no longer
-            // current. 409 rather than 412, because the precondition is in the body, not a header.
+            // The document moved under the caller: its body expectedVersion or If-Match version is
+            // no longer current. This API uses 409 for either conditional-write transport.
             ConfigErrorCode.VERSION_CONFLICT ->
                 problem(409, "Version conflict", exception.message, "version_conflict")
             ConfigErrorCode.INTERNAL ->

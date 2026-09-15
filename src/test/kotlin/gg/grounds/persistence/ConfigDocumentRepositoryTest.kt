@@ -25,6 +25,34 @@ class ConfigDocumentRepositoryTest {
     private val repository = createRepository(dataSource)
 
     @Test
+    fun `upsert consumes the returning row instead of executing an update`() {
+        val writeDataSource: DataSource = mock()
+        val writeConnection: Connection = mock()
+        val writeStatement: PreparedStatement = mock()
+        val returningRow: ResultSet = mock()
+        val writeRepository = createRepository(writeDataSource)
+        val document =
+            ConfigDocument(
+                app = "player",
+                env = "prod",
+                namespace = "feature-flags",
+                configKey = "new-ui",
+                contentJson = "{}",
+                updatedBy = "tester",
+            )
+        whenever(writeDataSource.connection).thenReturn(writeConnection)
+        whenever(writeConnection.prepareStatement(any())).thenReturn(writeStatement)
+        whenever(writeStatement.executeQuery()).thenReturn(returningRow)
+        whenever(returningRow.next()).thenReturn(true)
+
+        assertTrue(writeRepository.upsert(document))
+
+        verify(writeStatement).executeQuery()
+        verify(writeStatement, never()).executeUpdate()
+        verify(returningRow).close()
+    }
+
+    @Test
     fun `findAll rethrows SQLException when read fails`() {
         val sqlError = SQLException("database unavailable")
         whenever(dataSource.connection).thenThrow(sqlError)
@@ -136,6 +164,7 @@ class ConfigDocumentRepositoryTest {
         val transactionDataSource: DataSource = mock()
         val transactionConnection: Connection = mock()
         val upsertStatement: PreparedStatement = mock()
+        val upsertResultSet: ResultSet = mock()
         val incrementStatement: PreparedStatement = mock()
         val incrementResultSet: ResultSet = mock()
         val transactionRepository = createRepository(transactionDataSource)
@@ -152,14 +181,19 @@ class ConfigDocumentRepositoryTest {
         whenever(transactionConnection.autoCommit).thenReturn(true)
         whenever(transactionConnection.prepareStatement(any()))
             .thenReturn(upsertStatement, incrementStatement)
-        whenever(upsertStatement.executeUpdate()).thenReturn(1)
+        whenever(upsertStatement.executeQuery()).thenReturn(upsertResultSet)
+        whenever(upsertResultSet.next()).thenReturn(true)
+        whenever(upsertResultSet.getLong("version")).thenReturn(4L)
         whenever(incrementStatement.executeQuery()).thenReturn(incrementResultSet)
         whenever(incrementResultSet.next()).thenReturn(true)
         whenever(incrementResultSet.getLong("version")).thenReturn(42L)
 
         val result = transactionRepository.upsertAndIncrementVersion(document)
 
-        assertEquals(ConfigDocumentRepository.UpsertAndIncrementVersionResult.Updated(42L), result)
+        assertEquals(
+            ConfigDocumentRepository.UpsertAndIncrementVersionResult.Updated(42L, 4L),
+            result,
+        )
         verify(transactionConnection).commit()
     }
 
@@ -168,6 +202,7 @@ class ConfigDocumentRepositoryTest {
         val transactionDataSource: DataSource = mock()
         val transactionConnection: Connection = mock()
         val upsertStatement: PreparedStatement = mock()
+        val upsertResultSet: ResultSet = mock()
         val incrementStatement: PreparedStatement = mock()
         val transactionRepository = createRepository(transactionDataSource)
         val document =
@@ -184,7 +219,9 @@ class ConfigDocumentRepositoryTest {
         whenever(transactionConnection.autoCommit).thenReturn(true)
         whenever(transactionConnection.prepareStatement(any()))
             .thenReturn(upsertStatement, incrementStatement)
-        whenever(upsertStatement.executeUpdate()).thenReturn(1)
+        whenever(upsertStatement.executeQuery()).thenReturn(upsertResultSet)
+        whenever(upsertResultSet.next()).thenReturn(true)
+        whenever(upsertResultSet.getLong("version")).thenReturn(4L)
         whenever(incrementStatement.executeQuery()).thenThrow(sqlError)
 
         val result = transactionRepository.upsertAndIncrementVersion(document)
@@ -203,6 +240,7 @@ class ConfigDocumentRepositoryTest {
         val transactionDataSource: DataSource = mock()
         val transactionConnection: Connection = mock()
         val updateStatement: PreparedStatement = mock()
+        val updateResultSet: ResultSet = mock()
         val currentVersionStatement: PreparedStatement = mock()
         val currentVersionResultSet: ResultSet = mock()
         val transactionRepository = createRepository(transactionDataSource)
@@ -219,7 +257,8 @@ class ConfigDocumentRepositoryTest {
         whenever(transactionConnection.autoCommit).thenReturn(true)
         whenever(transactionConnection.prepareStatement(any()))
             .thenReturn(updateStatement, currentVersionStatement)
-        whenever(updateStatement.executeUpdate()).thenReturn(0)
+        whenever(updateStatement.executeQuery()).thenReturn(updateResultSet)
+        whenever(updateResultSet.next()).thenReturn(false)
         whenever(currentVersionStatement.executeQuery()).thenReturn(currentVersionResultSet)
         whenever(currentVersionResultSet.next()).thenReturn(true)
         whenever(currentVersionResultSet.getLong("version")).thenReturn(4L)
@@ -308,6 +347,7 @@ class ConfigDocumentRepositoryTest {
         val transactionDataSource: DataSource = mock()
         val transactionConnection: Connection = mock()
         val updateStatement: PreparedStatement = mock()
+        val updateResultSet: ResultSet = mock()
         val currentVersionStatement: PreparedStatement = mock()
         val currentVersionResultSet: ResultSet = mock()
         val transactionRepository = createRepository(transactionDataSource)
@@ -324,7 +364,8 @@ class ConfigDocumentRepositoryTest {
         whenever(transactionConnection.autoCommit).thenReturn(true)
         whenever(transactionConnection.prepareStatement(any()))
             .thenReturn(updateStatement, currentVersionStatement)
-        whenever(updateStatement.executeUpdate()).thenReturn(0)
+        whenever(updateStatement.executeQuery()).thenReturn(updateResultSet)
+        whenever(updateResultSet.next()).thenReturn(false)
         whenever(currentVersionStatement.executeQuery()).thenReturn(currentVersionResultSet)
         whenever(currentVersionResultSet.next()).thenReturn(false)
 
