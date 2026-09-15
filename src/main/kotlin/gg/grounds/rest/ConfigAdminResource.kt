@@ -1,6 +1,7 @@
 package gg.grounds.rest
 
 import gg.grounds.api.ConfigAdminDocumentService
+import gg.grounds.api.ConfigRequestContexts
 import gg.grounds.auth.AuthGuard
 import gg.grounds.auth.ConfigWritePolicy
 import gg.grounds.grpc.config.CreateDocumentRequest
@@ -13,6 +14,7 @@ import jakarta.ws.rs.Consumes
 import jakarta.ws.rs.DELETE
 import jakarta.ws.rs.DefaultValue
 import jakarta.ws.rs.GET
+import jakarta.ws.rs.HeaderParam
 import jakarta.ws.rs.POST
 import jakarta.ws.rs.PUT
 import jakarta.ws.rs.Path
@@ -20,9 +22,15 @@ import jakarta.ws.rs.PathParam
 import jakarta.ws.rs.Produces
 import jakarta.ws.rs.QueryParam
 import jakarta.ws.rs.core.Context
+import jakarta.ws.rs.core.HttpHeaders
 import jakarta.ws.rs.core.MediaType
+import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.SecurityContext
 import org.eclipse.microprofile.openapi.annotations.Operation
+import org.eclipse.microprofile.openapi.annotations.enums.SchemaType
+import org.eclipse.microprofile.openapi.annotations.headers.Header
+import org.eclipse.microprofile.openapi.annotations.media.Content
+import org.eclipse.microprofile.openapi.annotations.media.Schema
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse
 import org.eclipse.microprofile.openapi.annotations.tags.Tag
 
@@ -31,9 +39,9 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag
  *
  * Two different grants, on purpose. Browsing and creating are admin-only: seeing every app's
  * configuration is an operator's job, and *which* documents exist in an app is a shape decision.
- * Replacing and deleting one document additionally accept a writer named for that app — which is
- * what lets the proxies own the network MOTD without being handed every other app's configuration
- * along with it.
+ * Replacing and deleting one document additionally accept a writer named for that app or exact
+ * document — which lets a service own one document without being handed every other app's
+ * configuration along with it.
  *
  * The decisions themselves live in [AuthGuard] and [ConfigWritePolicy], taking the subject this
  * resource reads off the request; the gRPC facade asks the same functions through a gRPC Context.
@@ -75,7 +83,24 @@ constructor(
 
     @GET
     @Path("/namespaces/{namespace}/documents/{configKey}")
-    @Operation(summary = "Read any document", description = "Admin only.")
+    @Operation(
+        summary = "Read any document",
+        description =
+            "Admin only. The response carries a strong `ETag` holding this document's version.",
+    )
+    @APIResponse(
+        responseCode = "200",
+        description = "The document and its version ETag.",
+        content = [Content(schema = Schema(implementation = ConfigDocumentResponse::class))],
+        headers =
+            [
+                Header(
+                    name = "ETag",
+                    description = "Strong ETag containing the document's version.",
+                    schema = Schema(type = SchemaType.STRING),
+                )
+            ],
+    )
     @APIResponse(responseCode = "404", description = "No such document.")
     fun get(
         @PathParam("app") app: String?,
@@ -83,19 +108,21 @@ constructor(
         @PathParam("namespace") namespace: String?,
         @PathParam("configKey") configKey: String?,
         @Context security: SecurityContext,
-    ): ConfigDocumentResponse {
+    ): Response {
         requireAdmin(security, "read document")
-        return service
-            .getDocument(
-                GetDocumentRequest.newBuilder()
-                    .setApp(required(app, "app"))
-                    .setEnv(required(env, "env"))
-                    .setNamespace(required(namespace, "namespace"))
-                    .setConfigKey(required(configKey, "configKey"))
-                    .build()
-            )
-            .document
-            .toResponse()
+        val document =
+            service
+                .getDocument(
+                    GetDocumentRequest.newBuilder()
+                        .setApp(required(app, "app"))
+                        .setEnv(required(env, "env"))
+                        .setNamespace(required(namespace, "namespace"))
+                        .setConfigKey(required(configKey, "configKey"))
+                        .build()
+                )
+                .document
+                .toResponse()
+        return Response.ok(document).tag(etag(document.version)).build()
     }
 
     @POST
@@ -137,11 +164,31 @@ constructor(
     @Operation(
         summary = "Create or replace a document",
         description =
-            "Admin, or a writer named for this app. Send `expectedVersion` to make the write " +
-                "conditional — a mismatch answers 409 rather than quietly overwriting somebody " +
-                "else's change.",
+            "Admin, an app writer, or an exact-document writer. Send either `If-Match` with one " +
+                "strong document ETag or `expectedVersion` in the body to make the write conditional; " +
+                "a mismatch answers 409 rather than quietly overwriting somebody else's change.",
     )
-    @APIResponse(responseCode = "409", description = "expectedVersion is no longer current.")
+    @APIResponse(
+        responseCode = "200",
+        description = "The write result and its new version ETag.",
+        content = [Content(schema = Schema(implementation = WriteResultResponse::class))],
+        headers =
+            [
+                Header(
+                    name = "ETag",
+                    description = "Strong ETag containing the document's new version.",
+                    schema = Schema(type = SchemaType.STRING),
+                )
+            ],
+    )
+    @APIResponse(
+        responseCode = "409",
+        description = "The body expectedVersion or If-Match version is no longer current.",
+    )
+    @APIResponse(
+        responseCode = "400",
+        description = "If-Match is invalid or conflicts with body expectedVersion.",
+    )
     fun put(
         @PathParam("app") app: String?,
         @PathParam("env") env: String?,
@@ -149,27 +196,44 @@ constructor(
         @PathParam("configKey") configKey: String?,
         body: PutDocumentBody?,
         @Context security: SecurityContext,
-    ): WriteResultResponse {
-        val appId = required(app, "app")
-        requireWrite(security, appId, "replace document")
+        @HeaderParam("If-Match") ifMatch: String? = null,
+        @Context headers: HttpHeaders? = null,
+    ): Response {
+        val context =
+            ConfigRequestContexts.toDocumentContext(
+                required(app, "app"),
+                required(env, "env"),
+                required(namespace, "namespace"),
+                required(configKey, "configKey"),
+            )
+        requireWrite(security, context, "replace document")
         val payload = body ?: throw InvalidRequestException("A request body is required.")
+        val effectiveIfMatch = resolveIfMatch(ifMatch, headers)
+        if (payload.expectedVersion != null && effectiveIfMatch != null) {
+            throw InvalidRequestException("If-Match and expectedVersion must not be sent together.")
+        }
         val builder =
             PutDocumentRequest.newBuilder()
-                .setApp(appId)
-                .setEnv(required(env, "env"))
-                .setNamespace(required(namespace, "namespace"))
-                .setConfigKey(required(configKey, "configKey"))
+                .setApp(context.app)
+                .setEnv(context.env)
+                .setNamespace(context.namespace)
+                .setConfigKey(context.configKey)
                 .setContentJson(required(payload.contentJson, "contentJson"))
                 .setUpdatedBy(payload.updatedBy ?: subjectOf(security))
-        payload.expectedVersion?.let { builder.expectedVersion = it }
-        return WriteResultResponse(service.putDocument(builder.build()).version)
+        (payload.expectedVersion ?: effectiveIfMatch?.let(::parseIfMatch))?.let {
+            builder.expectedVersion = it
+        }
+        val response = service.putDocumentWithVersion(builder.build())
+        return Response.ok(WriteResultResponse(response.appVersion))
+            .tag(etag(response.documentVersion))
+            .build()
     }
 
     @DELETE
     @Path("/namespaces/{namespace}/documents/{configKey}")
     @Operation(
         summary = "Delete a document",
-        description = "Admin, or a writer named for this app.",
+        description = "Admin, an app writer, or an exact-document writer.",
     )
     fun delete(
         @PathParam("app") app: String?,
@@ -178,15 +242,21 @@ constructor(
         @PathParam("configKey") configKey: String?,
         @Context security: SecurityContext,
     ): DeleteResultResponse {
-        val appId = required(app, "app")
-        requireWrite(security, appId, "delete document")
+        val context =
+            ConfigRequestContexts.toDocumentContext(
+                required(app, "app"),
+                required(env, "env"),
+                required(namespace, "namespace"),
+                required(configKey, "configKey"),
+            )
+        requireWrite(security, context, "delete document")
         val response =
             service.deleteDocument(
                 DeleteDocumentRequest.newBuilder()
-                    .setApp(appId)
-                    .setEnv(required(env, "env"))
-                    .setNamespace(required(namespace, "namespace"))
-                    .setConfigKey(required(configKey, "configKey"))
+                    .setApp(context.app)
+                    .setEnv(context.env)
+                    .setNamespace(context.namespace)
+                    .setConfigKey(context.configKey)
                     .setDeletedBy(subjectOf(security))
                     .build()
             )
@@ -200,15 +270,31 @@ constructor(
         }
     }
 
-    private fun requireWrite(security: SecurityContext, app: String, operation: String) {
+    private fun requireWrite(
+        security: SecurityContext,
+        document: ConfigRequestContexts.DocumentContext,
+        operation: String,
+    ) {
         val subject = subjectOf(security)
-        if (!writePolicy.mayWriteAs(subject, app)) {
+        if (!writePolicy.mayWriteAs(subject, document)) {
             throw ForbiddenException(
-                "$operation on app '$app' requires admin or a configured writer (caller=$subject)"
+                "$operation on app '${document.app}' requires admin or a configured writer (caller=$subject)"
             )
         }
     }
 
     private fun subjectOf(security: SecurityContext): String =
         security.userPrincipal?.name.orEmpty()
+
+    private fun resolveIfMatch(ifMatch: String?, headers: HttpHeaders?): String? {
+        if (headers == null) return ifMatch
+        val values = headers.getRequestHeader("If-Match") ?: emptyList()
+        if (values.isEmpty()) return null
+        if (values.size != 1 || values.single().isEmpty()) {
+            throw InvalidRequestException(
+                "If-Match must contain exactly one non-empty field value."
+            )
+        }
+        return values.single()
+    }
 }

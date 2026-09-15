@@ -27,7 +27,8 @@ internal constructor(
     data class SyncDefaultsResult(val createdDefaults: List<DefaultConfig>, val version: Long)
 
     sealed interface UpsertAndIncrementVersionResult {
-        data class Updated(val version: Long) : UpsertAndIncrementVersionResult
+        data class Updated(val version: Long, val documentVersion: Long) :
+            UpsertAndIncrementVersionResult
 
         data class PreconditionFailed(val currentDocumentVersion: Long) :
             UpsertAndIncrementVersionResult
