@@ -22,6 +22,7 @@ import jakarta.ws.rs.PathParam
 import jakarta.ws.rs.Produces
 import jakarta.ws.rs.QueryParam
 import jakarta.ws.rs.core.Context
+import jakarta.ws.rs.core.HttpHeaders
 import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.SecurityContext
@@ -196,6 +197,7 @@ constructor(
         body: PutDocumentBody?,
         @Context security: SecurityContext,
         @HeaderParam("If-Match") ifMatch: String? = null,
+        @Context headers: HttpHeaders? = null,
     ): Response {
         val context =
             ConfigRequestContexts.toDocumentContext(
@@ -206,7 +208,8 @@ constructor(
             )
         requireWrite(security, context, "replace document")
         val payload = body ?: throw InvalidRequestException("A request body is required.")
-        if (payload.expectedVersion != null && ifMatch != null) {
+        val effectiveIfMatch = resolveIfMatch(ifMatch, headers)
+        if (payload.expectedVersion != null && effectiveIfMatch != null) {
             throw InvalidRequestException("If-Match and expectedVersion must not be sent together.")
         }
         val builder =
@@ -217,12 +220,12 @@ constructor(
                 .setConfigKey(context.configKey)
                 .setContentJson(required(payload.contentJson, "contentJson"))
                 .setUpdatedBy(payload.updatedBy ?: subjectOf(security))
-        (payload.expectedVersion ?: ifMatch?.let(::parseIfMatch))?.let {
+        (payload.expectedVersion ?: effectiveIfMatch?.let(::parseIfMatch))?.let {
             builder.expectedVersion = it
         }
-        val response = service.putDocument(builder.build())
-        return Response.ok(WriteResultResponse(response.version))
-            .tag(etag(response.version))
+        val response = service.putDocumentWithVersion(builder.build())
+        return Response.ok(WriteResultResponse(response.appVersion))
+            .tag(etag(response.documentVersion))
             .build()
     }
 
@@ -282,4 +285,16 @@ constructor(
 
     private fun subjectOf(security: SecurityContext): String =
         security.userPrincipal?.name.orEmpty()
+
+    private fun resolveIfMatch(ifMatch: String?, headers: HttpHeaders?): String? {
+        if (headers == null) return ifMatch
+        val values = headers.getRequestHeader("If-Match") ?: emptyList()
+        if (values.isEmpty()) return null
+        if (values.size != 1 || values.single().isEmpty()) {
+            throw InvalidRequestException(
+                "If-Match must contain exactly one non-empty field value."
+            )
+        }
+        return values.single()
+    }
 }

@@ -83,7 +83,9 @@ self-configuring service needs.
 Single-document reads and successful PUTs return a strong `ETag` containing the document version.
 PUT accepts that value in `If-Match` only as one quoted, canonical positive signed-Int64 value (for
 example `"9007199254740993"`); it is mutually exclusive with the compatible body
-`expectedVersion`. A stale value returns 409 without retrying or overwriting the newer document.
+`expectedVersion`. The PUT JSON `version` remains the app-wide change counter for compatibility;
+the ETag is the distinct per-document CAS version. A stale value returns 409 without retrying or
+overwriting the newer document.
 
 ## Operations
 

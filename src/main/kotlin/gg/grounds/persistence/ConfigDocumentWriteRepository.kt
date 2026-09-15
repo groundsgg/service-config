@@ -47,8 +47,8 @@ constructor(private val dataSource: DataSource) {
                 val originalAutoCommit = connection.autoCommit
                 connection.autoCommit = false
                 try {
-                    val upsertedRows = upsertDocument(connection, document, expectedVersion)
-                    if (upsertedRows == 0) {
+                    val documentVersion = upsertDocument(connection, document, expectedVersion)
+                    if (documentVersion == null) {
                         val currentDocumentVersion =
                             getDocumentVersion(
                                 connection,
@@ -75,7 +75,10 @@ constructor(private val dataSource: DataSource) {
                     } else {
                         val version = incrementVersion(connection, document.app, document.env)
                         connection.commit()
-                        ConfigDocumentRepository.UpsertAndIncrementVersionResult.Updated(version)
+                        ConfigDocumentRepository.UpsertAndIncrementVersionResult.Updated(
+                            version,
+                            documentVersion,
+                        )
                     }
                 } catch (error: SQLException) {
                     rollbackSafely(connection, error)
@@ -397,7 +400,7 @@ constructor(private val dataSource: DataSource) {
         connection: Connection,
         document: ConfigDocument,
         expectedVersion: Long?,
-    ): Int {
+    ): Long? {
         return if (expectedVersion != null) {
             connection.prepareStatement(UPDATE_IF_VERSION_MATCHES).use { statement ->
                 statement.setString(1, document.contentJson)
@@ -407,7 +410,9 @@ constructor(private val dataSource: DataSource) {
                 statement.setString(5, document.namespace)
                 statement.setString(6, document.configKey)
                 statement.setLong(7, expectedVersion)
-                statement.executeUpdate()
+                statement.executeQuery().use { resultSet ->
+                    if (resultSet.next()) resultSet.getLong("version") else null
+                }
             }
         } else {
             connection.prepareStatement(UPSERT).use { statement ->
@@ -417,7 +422,9 @@ constructor(private val dataSource: DataSource) {
                 statement.setString(4, document.configKey)
                 statement.setString(5, document.contentJson)
                 statement.setString(6, document.updatedBy)
-                statement.executeUpdate()
+                statement.executeQuery().use { resultSet ->
+                    if (resultSet.next()) resultSet.getLong("version") else null
+                }
             }
         }
     }
@@ -472,6 +479,7 @@ constructor(private val dataSource: DataSource) {
                           version = config_documents.version + 1,
                           updated_by = EXCLUDED.updated_by,
                           updated_at = now()
+            RETURNING version
             """
 
         private const val UPDATE_IF_VERSION_MATCHES =
@@ -482,6 +490,7 @@ constructor(private val dataSource: DataSource) {
                 updated_by = ?,
                 updated_at = now()
             WHERE app = ? AND env = ? AND namespace = ? AND config_key = ? AND version = ?
+            RETURNING version
             """
 
         private const val SELECT_DOCUMENT_VERSION =
