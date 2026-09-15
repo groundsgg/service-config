@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/groundsgg/service-config/compare/v1.1.0...v1.2.0) (2026-09-15)
+
+
+### Features
+
+* support explicit static NATS publisher authentication ([#68](https://github.com/groundsgg/service-config/issues/68)) ([f9ff0e9](https://github.com/groundsgg/service-config/commit/f9ff0e9b6b5da0c793948d1f69816374ffc76b74))
+
 ## [1.1.0](https://github.com/groundsgg/service-config/compare/v1.0.0...v1.1.0) (2026-09-15)
 
 
