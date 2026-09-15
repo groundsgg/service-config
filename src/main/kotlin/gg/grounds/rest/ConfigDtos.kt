@@ -65,8 +65,9 @@ data class PutDocumentBody(
     @get:Schema(description = "Who to record as the author.") val updatedBy: String? = null,
     @get:Schema(
         description =
-            "The version the caller believes is current. Omitted writes unconditionally; a " +
-                "mismatch is a 409 rather than a silent overwrite of somebody else's change."
+            "The version the caller believes is current. Omitted writes unconditionally only when " +
+                "If-Match is also absent; body expectedVersion and If-Match are mutually exclusive. " +
+                "A mismatch is a 409 rather than a silent overwrite of somebody else's change."
     )
     val expectedVersion: Long? = null,
 )

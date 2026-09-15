@@ -80,6 +80,11 @@ Unset (the default) means admin-only. Creating stays admin-only in every case: w
 in an app is a shape decision, and `PutDocument` is already the create-or-replace path a
 self-configuring service needs.
 
+Single-document reads and successful PUTs return a strong `ETag` containing the document version.
+PUT accepts that value in `If-Match` only as one quoted, canonical positive signed-Int64 value (for
+example `"9007199254740993"`); it is mutually exclusive with the compatible body
+`expectedVersion`. A stale value returns 409 without retrying or overwriting the newer document.
+
 ## Operations
 
 `quarkus.flyway.migrate-at-start=true` is enabled today for convenience, but it is not the preferred

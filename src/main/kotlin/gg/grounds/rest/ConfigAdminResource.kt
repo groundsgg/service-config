@@ -14,6 +14,7 @@ import jakarta.ws.rs.Consumes
 import jakarta.ws.rs.DELETE
 import jakarta.ws.rs.DefaultValue
 import jakarta.ws.rs.GET
+import jakarta.ws.rs.HeaderParam
 import jakarta.ws.rs.POST
 import jakarta.ws.rs.PUT
 import jakarta.ws.rs.Path
@@ -22,6 +23,7 @@ import jakarta.ws.rs.Produces
 import jakarta.ws.rs.QueryParam
 import jakarta.ws.rs.core.Context
 import jakarta.ws.rs.core.MediaType
+import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.SecurityContext
 import org.eclipse.microprofile.openapi.annotations.Operation
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse
@@ -76,7 +78,10 @@ constructor(
 
     @GET
     @Path("/namespaces/{namespace}/documents/{configKey}")
-    @Operation(summary = "Read any document", description = "Admin only.")
+    @Operation(
+        summary = "Read any document",
+        description = "Admin only. The response carries a strong `ETag` holding this document's version.",
+    )
     @APIResponse(responseCode = "404", description = "No such document.")
     fun get(
         @PathParam("app") app: String?,
@@ -84,9 +89,10 @@ constructor(
         @PathParam("namespace") namespace: String?,
         @PathParam("configKey") configKey: String?,
         @Context security: SecurityContext,
-    ): ConfigDocumentResponse {
+    ): Response {
         requireAdmin(security, "read document")
-        return service
+        val document =
+            service
             .getDocument(
                 GetDocumentRequest.newBuilder()
                     .setApp(required(app, "app"))
@@ -97,6 +103,7 @@ constructor(
             )
             .document
             .toResponse()
+        return Response.ok(document).tag(etag(document.version)).build()
     }
 
     @POST
@@ -138,11 +145,12 @@ constructor(
     @Operation(
         summary = "Create or replace a document",
         description =
-            "Admin, an app writer, or an exact-document writer. Send `expectedVersion` to make the write " +
-                "conditional — a mismatch answers 409 rather than quietly overwriting somebody " +
-                "else's change.",
+            "Admin, an app writer, or an exact-document writer. Send either `If-Match` with one " +
+                "strong document ETag or `expectedVersion` in the body to make the write conditional; " +
+                "a mismatch answers 409 rather than quietly overwriting somebody else's change.",
     )
     @APIResponse(responseCode = "409", description = "expectedVersion is no longer current.")
+    @APIResponse(responseCode = "400", description = "If-Match is invalid or conflicts with body expectedVersion.")
     fun put(
         @PathParam("app") app: String?,
         @PathParam("env") env: String?,
@@ -150,7 +158,8 @@ constructor(
         @PathParam("configKey") configKey: String?,
         body: PutDocumentBody?,
         @Context security: SecurityContext,
-    ): WriteResultResponse {
+        @HeaderParam("If-Match") ifMatch: String? = null,
+    ): Response {
         val context =
             ConfigRequestContexts.toDocumentContext(
                 required(app, "app"),
@@ -160,6 +169,9 @@ constructor(
             )
         requireWrite(security, context, "replace document")
         val payload = body ?: throw InvalidRequestException("A request body is required.")
+        if (payload.expectedVersion != null && ifMatch != null) {
+            throw InvalidRequestException("If-Match and expectedVersion must not be sent together.")
+        }
         val builder =
             PutDocumentRequest.newBuilder()
                 .setApp(context.app)
@@ -168,8 +180,9 @@ constructor(
                 .setConfigKey(context.configKey)
                 .setContentJson(required(payload.contentJson, "contentJson"))
                 .setUpdatedBy(payload.updatedBy ?: subjectOf(security))
-        payload.expectedVersion?.let { builder.expectedVersion = it }
-        return WriteResultResponse(service.putDocument(builder.build()).version)
+        (payload.expectedVersion ?: ifMatch?.let(::parseIfMatch))?.let { builder.expectedVersion = it }
+        val response = service.putDocument(builder.build())
+        return Response.ok(WriteResultResponse(response.version)).tag(etag(response.version)).build()
     }
 
     @DELETE

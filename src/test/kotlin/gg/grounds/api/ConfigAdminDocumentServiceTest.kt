@@ -8,12 +8,14 @@ import gg.grounds.grpc.config.CreateDocumentRequest
 import gg.grounds.grpc.config.DeleteDocumentRequest
 import gg.grounds.grpc.config.PutDocumentRequest
 import gg.grounds.persistence.ConfigDocumentRepository
+import gg.grounds.rest.ConfigExceptionMapper
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 
@@ -88,6 +90,8 @@ class ConfigAdminDocumentServiceTest {
             "Config document version mismatch (app=player, env=prod, namespace=feature-flags, configKey=new-ui, expectedVersion=3, currentVersion=4)",
             thrown.message,
         )
+        assertEquals(409, ConfigExceptionMapper().toResponse(thrown).status)
+        verify(repository).upsertAndIncrementVersion(any(), eq(3L))
     }
 
     @Test

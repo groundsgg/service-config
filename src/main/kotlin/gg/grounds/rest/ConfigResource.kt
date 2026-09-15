@@ -97,15 +97,19 @@ class ConfigResource @Inject constructor(private val service: ConfigDocumentApiS
 
     @GET
     @Path("/namespaces/{namespace}/documents/{configKey}")
-    @Operation(summary = "Read a single document")
+    @Operation(
+        summary = "Read a single document",
+        description = "The response carries a strong `ETag` holding this document's version.",
+    )
     @APIResponse(responseCode = "404", description = "No such document.")
     fun document(
         @PathParam("app") app: String?,
         @PathParam("env") env: String?,
         @PathParam("namespace") namespace: String?,
         @PathParam("configKey") configKey: String?,
-    ): ConfigDocumentResponse =
-        service
+    ): Response {
+        val document =
+            service
             .getDocument(
                 GetDocumentRequest.newBuilder()
                     .setApp(required(app, "app"))
@@ -116,6 +120,8 @@ class ConfigResource @Inject constructor(private val service: ConfigDocumentApiS
             )
             .document
             .toResponse()
+        return Response.ok(document).tag(etag(document.version)).build()
+    }
 
     @POST
     @Path("/defaults")
@@ -174,6 +180,16 @@ internal fun etag(version: Long): jakarta.ws.rs.core.EntityTag =
  */
 internal fun parseETag(header: String): Long? =
     header.trim().removePrefix("W/").trim('"').toLongOrNull()
+
+/** Strict write preconditions reject ambiguity rather than risk an unchecked overwrite. */
+internal fun parseIfMatch(header: String): Long {
+    val match = STRONG_VERSION_ETAG.matchEntire(header.trim(' ', '\t'))
+        ?: throw InvalidRequestException("If-Match must be one strong quoted canonical positive version.")
+    return match.groupValues[1].toLongOrNull()
+        ?: throw InvalidRequestException("If-Match version is outside the signed Int64 range.")
+}
+
+private val STRONG_VERSION_ETAG = Regex("\\\"([1-9][0-9]*)\\\"")
 
 internal fun GetSnapshotResponse.toSnapshot(): SnapshotResponse =
     SnapshotResponse(version = version, documents = documentsList.map { it.toResponse() })

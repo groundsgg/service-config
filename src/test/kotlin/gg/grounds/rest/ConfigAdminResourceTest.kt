@@ -2,7 +2,9 @@ package gg.grounds.rest
 
 import gg.grounds.api.ConfigAdminDocumentService
 import gg.grounds.auth.ConfigWritePolicy
+import gg.grounds.grpc.config.ConfigDocument
 import gg.grounds.grpc.config.DeleteDocumentResponse
+import gg.grounds.grpc.config.GetDocumentResponse
 import gg.grounds.grpc.config.PutDocumentResponse
 import jakarta.ws.rs.core.SecurityContext
 import java.security.Principal
@@ -36,7 +38,8 @@ class ConfigAdminResourceTest {
                 forge,
             )
 
-        assertEquals(7, result.version)
+        assertEquals(7, (result.entity as WriteResultResponse).version)
+        assertEquals("\"7\"", result.getHeaderString("ETag"))
         verify(service)
             .putDocument(
                 org.mockito.kotlin.check {
@@ -44,6 +47,7 @@ class ConfigAdminResourceTest {
                     assertEquals("stage", it.env)
                     assertEquals("resourcepacks", it.namespace)
                     assertEquals("global", it.configKey)
+                    assertEquals(false, it.hasExpectedVersion())
                 }
             )
     }
@@ -94,6 +98,104 @@ class ConfigAdminResourceTest {
     fun `exact writer cannot delete in a neighboring environment`() {
         assertThrows(ForbiddenException::class.java) {
             resource.delete("network", "prod", "resourcepacks", "global", forge)
+        }
+
+        verifyNoInteractions(service)
+    }
+
+    @Test
+    fun `admin document read carries the document version as a strong etag`() {
+        whenever(service.getDocument(any()))
+            .thenReturn(
+                GetDocumentResponse.newBuilder()
+                    .setDocument(
+                        ConfigDocument.newBuilder()
+                            .setNamespace("resourcepacks")
+                            .setConfigKey("global")
+                            .setContentJson("{}")
+                            .setVersion(Long.MAX_VALUE)
+                    )
+                    .build()
+            )
+
+        val response =
+            resource.get(
+                "network",
+                "stage",
+                "resourcepacks",
+                "global",
+                security("system:serviceaccount:platform-admin:config-admin"),
+            )
+
+        assertEquals(200, response.status)
+        assertEquals("\"${Long.MAX_VALUE}\"", response.getHeaderString("ETag"))
+        assertEquals(Long.MAX_VALUE, (response.entity as ConfigDocumentResponse).version)
+    }
+
+    @Test
+    fun `if match supplies a lossless expected version and the successful write etag`() {
+        whenever(service.putDocument(any()))
+            .thenReturn(PutDocumentResponse.newBuilder().setVersion(Long.MAX_VALUE).build())
+
+        val response =
+            resource.put(
+                "network",
+                "stage",
+                "resourcepacks",
+                "global",
+                PutDocumentBody("{}"),
+                forge,
+                " \"9007199254740993\" ",
+            )
+
+        assertEquals(Long.MAX_VALUE, (response.entity as WriteResultResponse).version)
+        assertEquals("\"${Long.MAX_VALUE}\"", response.getHeaderString("ETag"))
+        verify(service)
+            .putDocument(
+                org.mockito.kotlin.check {
+                    assertEquals(true, it.hasExpectedVersion())
+                    assertEquals(9007199254740993L, it.expectedVersion)
+                }
+            )
+    }
+
+    @Test
+    fun `body expected version remains a compatible conditional write path`() {
+        whenever(service.putDocument(any()))
+            .thenReturn(PutDocumentResponse.newBuilder().setVersion(9).build())
+
+        val response =
+            resource.put(
+                "network",
+                "stage",
+                "resourcepacks",
+                "global",
+                PutDocumentBody("{}", expectedVersion = 8),
+                forge,
+            )
+
+        assertEquals(9, (response.entity as WriteResultResponse).version)
+        verify(service)
+            .putDocument(
+                org.mockito.kotlin.check {
+                    assertEquals(true, it.hasExpectedVersion())
+                    assertEquals(8, it.expectedVersion)
+                }
+            )
+    }
+
+    @Test
+    fun `body and if match versions are mutually exclusive`() {
+        assertThrows(InvalidRequestException::class.java) {
+            resource.put(
+                "network",
+                "stage",
+                "resourcepacks",
+                "global",
+                PutDocumentBody("{}", expectedVersion = 7),
+                forge,
+                "\"7\"",
+            )
         }
 
         verifyNoInteractions(service)
