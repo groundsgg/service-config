@@ -19,6 +19,10 @@ import jakarta.ws.rs.Produces
 import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.Response
 import org.eclipse.microprofile.openapi.annotations.Operation
+import org.eclipse.microprofile.openapi.annotations.enums.SchemaType
+import org.eclipse.microprofile.openapi.annotations.headers.Header
+import org.eclipse.microprofile.openapi.annotations.media.Content
+import org.eclipse.microprofile.openapi.annotations.media.Schema
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse
 import org.eclipse.microprofile.openapi.annotations.tags.Tag
 
@@ -100,6 +104,19 @@ class ConfigResource @Inject constructor(private val service: ConfigDocumentApiS
     @Operation(
         summary = "Read a single document",
         description = "The response carries a strong `ETag` holding this document's version.",
+    )
+    @APIResponse(
+        responseCode = "200",
+        description = "The document and its version ETag.",
+        content = [Content(schema = Schema(implementation = ConfigDocumentResponse::class))],
+        headers =
+            [
+                Header(
+                    name = "ETag",
+                    description = "Strong ETag containing the document's version.",
+                    schema = Schema(type = SchemaType.STRING),
+                )
+            ],
     )
     @APIResponse(responseCode = "404", description = "No such document.")
     fun document(

@@ -26,6 +26,10 @@ import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.Response
 import jakarta.ws.rs.core.SecurityContext
 import org.eclipse.microprofile.openapi.annotations.Operation
+import org.eclipse.microprofile.openapi.annotations.enums.SchemaType
+import org.eclipse.microprofile.openapi.annotations.headers.Header
+import org.eclipse.microprofile.openapi.annotations.media.Content
+import org.eclipse.microprofile.openapi.annotations.media.Schema
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse
 import org.eclipse.microprofile.openapi.annotations.tags.Tag
 
@@ -82,6 +86,19 @@ constructor(
         summary = "Read any document",
         description =
             "Admin only. The response carries a strong `ETag` holding this document's version.",
+    )
+    @APIResponse(
+        responseCode = "200",
+        description = "The document and its version ETag.",
+        content = [Content(schema = Schema(implementation = ConfigDocumentResponse::class))],
+        headers =
+            [
+                Header(
+                    name = "ETag",
+                    description = "Strong ETag containing the document's version.",
+                    schema = Schema(type = SchemaType.STRING),
+                )
+            ],
     )
     @APIResponse(responseCode = "404", description = "No such document.")
     fun get(
@@ -150,7 +167,23 @@ constructor(
                 "strong document ETag or `expectedVersion` in the body to make the write conditional; " +
                 "a mismatch answers 409 rather than quietly overwriting somebody else's change.",
     )
-    @APIResponse(responseCode = "409", description = "expectedVersion is no longer current.")
+    @APIResponse(
+        responseCode = "200",
+        description = "The write result and its new version ETag.",
+        content = [Content(schema = Schema(implementation = WriteResultResponse::class))],
+        headers =
+            [
+                Header(
+                    name = "ETag",
+                    description = "Strong ETag containing the document's new version.",
+                    schema = Schema(type = SchemaType.STRING),
+                )
+            ],
+    )
+    @APIResponse(
+        responseCode = "409",
+        description = "The body expectedVersion or If-Match version is no longer current.",
+    )
     @APIResponse(
         responseCode = "400",
         description = "If-Match is invalid or conflicts with body expectedVersion.",
