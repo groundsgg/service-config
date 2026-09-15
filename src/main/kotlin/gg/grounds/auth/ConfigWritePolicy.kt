@@ -46,8 +46,8 @@ class ConfigWritePolicy(
         AuthGuard.isAdminSubject(subject) || mayWrite(subject, app)
 
     /**
-     * May [subject] write [document]? App writers retain their existing authority across that
-     * app; an exact writer is limited to the normalized document identity it was configured for.
+     * May [subject] write [document]? App writers retain their existing authority across that app;
+     * an exact writer is limited to the normalized document identity it was configured for.
      */
     fun mayWriteAs(subject: String, document: ConfigRequestContexts.DocumentContext): Boolean =
         AuthGuard.isAdminSubject(subject) ||
@@ -86,13 +86,15 @@ class ConfigWritePolicy(
                     )
                     return@forEach
                 }
-                val grant = parseGrant(allowed) ?: run {
-                    LOG.warnf(
-                        "Ignoring config writer entry '%s' — expected <subject-suffix>=<app> or <subject-suffix>=<app>/<env>/<namespace>/<configKey>",
-                        entry,
-                    )
-                    return@forEach
-                }
+                val grant =
+                    parseGrant(allowed)
+                        ?: run {
+                            LOG.warnf(
+                                "Ignoring config writer entry '%s' — expected <subject-suffix>=<app> or <subject-suffix>=<app>/<env>/<namespace>/<configKey>",
+                                entry,
+                            )
+                            return@forEach
+                        }
                 parsed.put(suffix, grant)?.let {
                     LOG.warnf("Config writer '%s' listed twice; keeping last valid grant", suffix)
                 }

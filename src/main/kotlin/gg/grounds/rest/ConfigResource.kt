@@ -110,16 +110,16 @@ class ConfigResource @Inject constructor(private val service: ConfigDocumentApiS
     ): Response {
         val document =
             service
-            .getDocument(
-                GetDocumentRequest.newBuilder()
-                    .setApp(required(app, "app"))
-                    .setEnv(required(env, "env"))
-                    .setNamespace(required(namespace, "namespace"))
-                    .setConfigKey(required(configKey, "configKey"))
-                    .build()
-            )
-            .document
-            .toResponse()
+                .getDocument(
+                    GetDocumentRequest.newBuilder()
+                        .setApp(required(app, "app"))
+                        .setEnv(required(env, "env"))
+                        .setNamespace(required(namespace, "namespace"))
+                        .setConfigKey(required(configKey, "configKey"))
+                        .build()
+                )
+                .document
+                .toResponse()
         return Response.ok(document).tag(etag(document.version)).build()
     }
 
@@ -183,8 +183,11 @@ internal fun parseETag(header: String): Long? =
 
 /** Strict write preconditions reject ambiguity rather than risk an unchecked overwrite. */
 internal fun parseIfMatch(header: String): Long {
-    val match = STRONG_VERSION_ETAG.matchEntire(header.trim(' ', '\t'))
-        ?: throw InvalidRequestException("If-Match must be one strong quoted canonical positive version.")
+    val match =
+        STRONG_VERSION_ETAG.matchEntire(header.trim(' ', '\t'))
+            ?: throw InvalidRequestException(
+                "If-Match must be one strong quoted canonical positive version."
+            )
     return match.groupValues[1].toLongOrNull()
         ?: throw InvalidRequestException("If-Match version is outside the signed Int64 range.")
 }

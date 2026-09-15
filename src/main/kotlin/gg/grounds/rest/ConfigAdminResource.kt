@@ -80,7 +80,8 @@ constructor(
     @Path("/namespaces/{namespace}/documents/{configKey}")
     @Operation(
         summary = "Read any document",
-        description = "Admin only. The response carries a strong `ETag` holding this document's version.",
+        description =
+            "Admin only. The response carries a strong `ETag` holding this document's version.",
     )
     @APIResponse(responseCode = "404", description = "No such document.")
     fun get(
@@ -93,16 +94,16 @@ constructor(
         requireAdmin(security, "read document")
         val document =
             service
-            .getDocument(
-                GetDocumentRequest.newBuilder()
-                    .setApp(required(app, "app"))
-                    .setEnv(required(env, "env"))
-                    .setNamespace(required(namespace, "namespace"))
-                    .setConfigKey(required(configKey, "configKey"))
-                    .build()
-            )
-            .document
-            .toResponse()
+                .getDocument(
+                    GetDocumentRequest.newBuilder()
+                        .setApp(required(app, "app"))
+                        .setEnv(required(env, "env"))
+                        .setNamespace(required(namespace, "namespace"))
+                        .setConfigKey(required(configKey, "configKey"))
+                        .build()
+                )
+                .document
+                .toResponse()
         return Response.ok(document).tag(etag(document.version)).build()
     }
 
@@ -150,7 +151,10 @@ constructor(
                 "a mismatch answers 409 rather than quietly overwriting somebody else's change.",
     )
     @APIResponse(responseCode = "409", description = "expectedVersion is no longer current.")
-    @APIResponse(responseCode = "400", description = "If-Match is invalid or conflicts with body expectedVersion.")
+    @APIResponse(
+        responseCode = "400",
+        description = "If-Match is invalid or conflicts with body expectedVersion.",
+    )
     fun put(
         @PathParam("app") app: String?,
         @PathParam("env") env: String?,
@@ -180,9 +184,13 @@ constructor(
                 .setConfigKey(context.configKey)
                 .setContentJson(required(payload.contentJson, "contentJson"))
                 .setUpdatedBy(payload.updatedBy ?: subjectOf(security))
-        (payload.expectedVersion ?: ifMatch?.let(::parseIfMatch))?.let { builder.expectedVersion = it }
+        (payload.expectedVersion ?: ifMatch?.let(::parseIfMatch))?.let {
+            builder.expectedVersion = it
+        }
         val response = service.putDocument(builder.build())
-        return Response.ok(WriteResultResponse(response.version)).tag(etag(response.version)).build()
+        return Response.ok(WriteResultResponse(response.version))
+            .tag(etag(response.version))
+            .build()
     }
 
     @DELETE

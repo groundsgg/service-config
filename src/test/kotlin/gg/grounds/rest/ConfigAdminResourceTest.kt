@@ -57,14 +57,7 @@ class ConfigAdminResourceTest {
         whenever(service.deleteDocument(any()))
             .thenReturn(DeleteDocumentResponse.newBuilder().setDeleted(true).setVersion(8).build())
 
-        val result =
-            resource.delete(
-                " network ",
-                " stage ",
-                " resourcepacks ",
-                " global ",
-                forge,
-            )
+        val result = resource.delete(" network ", " stage ", " resourcepacks ", " global ", forge)
 
         assertEquals(true, result.deleted)
         verify(service)

@@ -86,8 +86,7 @@ class ConfigWritePolicyTest {
 
     @Test
     fun `an exact writer may write only its configured document`() {
-        val exact =
-            ConfigWritePolicy(":forge=network/stage/resourcepacks/global")
+        val exact = ConfigWritePolicy(":forge=network/stage/resourcepacks/global")
         val document =
             ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global")
 
@@ -102,7 +101,12 @@ class ConfigWritePolicyTest {
         assertFalse(
             exact.mayWriteAs(
                 "system:serviceaccount:games:forge",
-                ConfigRequestContexts.toDocumentContext("network", "prod", "resourcepacks", "global"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "prod",
+                    "resourcepacks",
+                    "global",
+                ),
             )
         )
         assertFalse(
@@ -114,7 +118,12 @@ class ConfigWritePolicyTest {
         assertFalse(
             exact.mayWriteAs(
                 "system:serviceaccount:games:forge",
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "other"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "other",
+                ),
             )
         )
     }
@@ -126,9 +135,7 @@ class ConfigWritePolicyTest {
             ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global")
 
         assertTrue(legacy.mayWriteAs("system:serviceaccount:games:velocity", document))
-        assertTrue(
-            legacy.mayWriteAs("system:serviceaccount:platform-admin:config-admin", document)
-        )
+        assertTrue(legacy.mayWriteAs("system:serviceaccount:platform-admin:config-admin", document))
     }
 
     @Test
@@ -146,13 +153,23 @@ class ConfigWritePolicyTest {
         assertFalse(
             policy.mayWriteAs(
                 "system:serviceaccount:games:forge",
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
             )
         )
         assertTrue(
             policy.mayWriteAs(
                 "system:serviceaccount:games:forge",
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "override"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "override",
+                ),
             )
         )
     }

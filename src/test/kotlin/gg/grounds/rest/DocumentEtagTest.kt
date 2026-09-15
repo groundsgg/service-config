@@ -46,20 +46,21 @@ class DocumentEtagTest {
     @Test
     fun `if match rejects weak bare wildcard list overflow noncanonical and nonpositive values`() {
         listOf(
-            "W/\"7\"",
-            "7",
-            "*",
-            "\"7\", \"8\"",
-            "\"9223372036854775808\"",
-            "\"07\"",
-            "\"+7\"",
-            "\"0\"",
-            "\"-1\"",
-            "\r\"7\"",
-            "\"7\"\n",
-            "\u00a0\"7\"",
-        ).forEach { header ->
-            assertThrows(InvalidRequestException::class.java) { parseIfMatch(header) }
-        }
+                "W/\"7\"",
+                "7",
+                "*",
+                "\"7\", \"8\"",
+                "\"9223372036854775808\"",
+                "\"07\"",
+                "\"+7\"",
+                "\"0\"",
+                "\"-1\"",
+                "\r\"7\"",
+                "\"7\"\n",
+                "\u00a0\"7\"",
+            )
+            .forEach { header ->
+                assertThrows(InvalidRequestException::class.java) { parseIfMatch(header) }
+            }
     }
 }
