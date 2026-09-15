@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/groundsgg/service-config/compare/v1.0.0...v1.1.0) (2026-09-15)
+
+
+### Features
+
+* authorize exact documents and protect conditional writes ([#66](https://github.com/groundsgg/service-config/issues/66)) ([c82b824](https://github.com/groundsgg/service-config/commit/c82b8243828609716008cf11b51194491d966676))
+
 ## [1.0.0](https://github.com/groundsgg/service-config/compare/v0.8.0...v1.0.0) (2026-08-10)
 
 
