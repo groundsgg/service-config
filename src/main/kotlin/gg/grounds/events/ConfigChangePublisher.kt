@@ -31,6 +31,8 @@ constructor(
     private val reconnectWaitSeconds: Long,
     @param:ConfigProperty(name = "grounds.token-file") private val groundsTokenFile: String,
     private val objectMapper: ObjectMapper,
+    @param:ConfigProperty(name = "nats.auth-mode", defaultValue = DEFAULT_NATS_AUTH_MODE)
+    private val natsAuthMode: String = DEFAULT_NATS_AUTH_MODE,
 ) {
     constructor(
         natsUrl: String,
@@ -61,43 +63,25 @@ constructor(
             try {
                 existingConnection.close()
             } catch (error: Exception) {
-                LOG.warnf(error, "Failed to close stale NATS connection (url=%s)", natsUrl)
+                LOG.warnf(
+                    "Failed to close stale NATS connection (reason=%s)",
+                    error.javaClass.simpleName,
+                )
             } finally {
                 connection = null
             }
         }
         try {
-            val builder =
-                Options.Builder()
-                    .server(natsUrl)
-                    .maxReconnects(maxReconnects)
-                    .reconnectWait(Duration.ofSeconds(reconnectWaitSeconds))
-                    .connectionListener(
-                        ConnectionListener { connected, event ->
-                            onConnectionEvent(connected, event)
-                        }
-                    )
-            // Present the projected SA-token (audience grounds-services) as the
-            // NATS bearer for the auth-callout broker. tokenSupplier lands it in
-            // the CONNECT `auth_token` field and is re-invoked per (re)connect,
-            // so kubelet token rotation is picked up. Skipped when the token
-            // file is absent (local/dev without the projected volume).
-            val tokenPath = Path.of(groundsTokenFile)
-            if (Files.exists(tokenPath)) {
-                builder.tokenSupplier { Files.readString(tokenPath).trim().toCharArray() }
-            }
-            connection = Nats.connect(builder.build())
+            connection = Nats.connect(buildConnectionOptions())
             LOG.infof(
-                "Connected to NATS successfully (url=%s, maxReconnects=%d, reconnectWaitSeconds=%d)",
-                natsUrl,
+                "Connected to NATS successfully (maxReconnects=%d, reconnectWaitSeconds=%d)",
                 maxReconnects,
                 reconnectWaitSeconds,
             )
         } catch (error: Exception) {
             LOG.errorf(
-                error,
-                "Failed to connect to NATS (url=%s, maxReconnects=%d, reconnectWaitSeconds=%d)",
-                natsUrl,
+                "Failed to connect to NATS (reason=%s, maxReconnects=%d, reconnectWaitSeconds=%d)",
+                error.javaClass.simpleName,
                 maxReconnects,
                 reconnectWaitSeconds,
             )
@@ -141,8 +125,8 @@ constructor(
             return PublishChangeResult.PUBLISHED
         } catch (error: Exception) {
             LOG.errorf(
-                error,
-                "Failed to publish config change (subject=%s, app=%s, env=%s, version=%d, namespace=%s, configKey=%s)",
+                "Failed to publish config change (reason=%s, subject=%s, app=%s, env=%s, version=%d, namespace=%s, configKey=%s)",
+                error.javaClass.simpleName,
                 subject,
                 app,
                 env,
@@ -164,8 +148,35 @@ constructor(
             connection = null
             LOG.info("Disconnected from NATS successfully")
         } catch (error: Exception) {
-            LOG.errorf(error, "Failed to close NATS connection (url=%s)", natsUrl)
+            LOG.errorf("Failed to close NATS connection (reason=%s)", error.javaClass.simpleName)
         }
+    }
+
+    internal fun buildConnectionOptions(): Options {
+        val builder =
+            Options.Builder()
+                .server(natsUrl)
+                .maxReconnects(maxReconnects)
+                .reconnectWait(Duration.ofSeconds(reconnectWaitSeconds))
+                .connectionListener(
+                    ConnectionListener { connected, event -> onConnectionEvent(connected, event) }
+                )
+        when (natsAuthMode) {
+            PROJECTED_TOKEN_AUTH_MODE -> {
+                // tokenSupplier is invoked for each (re)connect, so projected-token rotation is
+                // picked up. The absent-file case remains compatible with local development.
+                val tokenPath = Path.of(groundsTokenFile)
+                if (Files.exists(tokenPath)) {
+                    builder.tokenSupplier { Files.readString(tokenPath).trim().toCharArray() }
+                }
+            }
+            STATIC_AUTH_MODE -> Unit
+            else ->
+                throw IllegalArgumentException(
+                    "Unsupported NATS authentication mode: $natsAuthMode"
+                )
+        }
+        return builder.build()
     }
 
     internal fun buildPayload(
@@ -238,6 +249,9 @@ constructor(
         private const val DEFAULT_MAX_RECONNECTS = -1
         private const val DEFAULT_RECONNECT_WAIT_SECONDS = 2L
         private const val DEFAULT_GROUNDS_TOKEN_FILE = "/var/run/secrets/grounds/token"
+        private const val DEFAULT_NATS_AUTH_MODE = "projected-token"
+        private const val PROJECTED_TOKEN_AUTH_MODE = "projected-token"
+        private const val STATIC_AUTH_MODE = "static"
         private val LOG = Logger.getLogger(ConfigChangePublisher::class.java)
     }
 }

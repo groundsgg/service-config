@@ -47,6 +47,12 @@ Every call is authenticated on both transports against the same
 ServiceAccount JWT against the cluster's JWKS and requires audience `grounds-services`. Set
 `GROUNDS_AUTH_ENABLED=false` for local dev, where no token is projected.
 
+The NATS publisher uses `NATS_AUTH_MODE=projected-token` by default, presenting the projected
+`GROUNDS_TOKEN_FILE` token to the auth-callout broker when that file exists. A private static-user
+hub can opt in explicitly with `NATS_AUTH_MODE=static` and a runtime secret-backed `NATS_URL`; this
+does not configure a NATS bearer or change HTTP projected-JWT authentication. The publisher needs
+only least-privilege permission to publish `config.network.stage.changed`.
+
 Authorization on top of that:
 
 | API | who |
