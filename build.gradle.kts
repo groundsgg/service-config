@@ -62,7 +62,7 @@ dependencies {
     implementation("gg.grounds:library-grpc-contracts-config:0.2.0")
     implementation("io.nats:jnats:2.26.2")
     // JWT validation for incoming gRPC calls (v2.2 Service Architecture).
-    implementation("com.nimbusds:nimbus-jose-jwt:10.9.1")
+    implementation("com.nimbusds:nimbus-jose-jwt:10.10")
     // OpenTelemetry — server-side gRPC spans → Alloy → Tempo.
     implementation("io.quarkus:quarkus-opentelemetry")
     // Prometheus metrics on /q/metrics — JVM, HTTP and the Agroal pool.
