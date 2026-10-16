@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/groundsgg/service-config/compare/v1.2.0...v1.3.0) (2026-10-16)
+
+
+### Features
+
+* **config:** expose last write on single document reads ([#82](https://github.com/groundsgg/service-config/issues/82)) ([dc6c185](https://github.com/groundsgg/service-config/commit/dc6c18514de250358aa69e88f5bed1fa1fe747e2))
+
 ## [1.2.0](https://github.com/groundsgg/service-config/compare/v1.1.0...v1.2.0) (2026-09-15)
 
 
