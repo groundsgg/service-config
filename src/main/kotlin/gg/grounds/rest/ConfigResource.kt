@@ -1,6 +1,7 @@
 package gg.grounds.rest
 
 import gg.grounds.api.ConfigDocumentApiService
+import gg.grounds.domain.ConfigDocument
 import gg.grounds.grpc.config.ConfigDefault
 import gg.grounds.grpc.config.GetDocumentRequest
 import gg.grounds.grpc.config.GetNamespaceSnapshotRequest
@@ -107,8 +108,8 @@ class ConfigResource @Inject constructor(private val service: ConfigDocumentApiS
     )
     @APIResponse(
         responseCode = "200",
-        description = "The document and its version ETag.",
-        content = [Content(schema = Schema(implementation = ConfigDocumentResponse::class))],
+        description = "The document, its last write, and its version ETag.",
+        content = [Content(schema = Schema(implementation = ConfigDocumentDetailResponse::class))],
         headers =
             [
                 Header(
@@ -135,8 +136,7 @@ class ConfigResource @Inject constructor(private val service: ConfigDocumentApiS
                         .setConfigKey(required(configKey, "configKey"))
                         .build()
                 )
-                .document
-                .toResponse()
+                .toDetailResponse()
         return Response.ok(document).tag(etag(document.version)).build()
     }
 
@@ -220,4 +220,14 @@ internal fun gg.grounds.grpc.config.ConfigDocument.toResponse(): ConfigDocumentR
         configKey = configKey,
         contentJson = contentJson,
         version = version,
+    )
+
+internal fun ConfigDocument.toDetailResponse(): ConfigDocumentDetailResponse =
+    ConfigDocumentDetailResponse(
+        namespace = namespace,
+        configKey = configKey,
+        contentJson = contentJson,
+        version = version,
+        updatedAt = updatedAt.toString(),
+        updatedBy = updatedBy,
     )
