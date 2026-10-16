@@ -81,7 +81,12 @@ class ConfigDocumentLookupTest {
         val actualDocument =
             ConfigDocumentLookup.findDocument(
                 repository,
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
             )
 
         assertEquals(14L, actualDocument.version)
@@ -97,7 +102,12 @@ class ConfigDocumentLookupTest {
             assertThrows(ConfigException::class.java) {
                 ConfigDocumentLookup.findDocument(
                     repository,
-                    ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global"),
+                    ConfigRequestContexts.toDocumentContext(
+                        "network",
+                        "stage",
+                        "resourcepacks",
+                        "global",
+                    ),
                 )
             }
 
