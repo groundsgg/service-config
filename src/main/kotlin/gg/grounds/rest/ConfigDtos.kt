@@ -12,6 +12,22 @@ data class ConfigDocumentResponse(
 )
 
 @Schema(
+    name = "ConfigDocumentDetail",
+    description = "One configuration document together with its last write.",
+)
+data class ConfigDocumentDetailResponse(
+    @get:Schema(description = "Grouping within the app, e.g. `motd`.") val namespace: String,
+    @get:Schema(description = "The document's key within the namespace.") val configKey: String,
+    @get:Schema(description = "The document itself, as a JSON string.") val contentJson: String,
+    @get:Schema(description = "The document's own version, for optimistic writes.")
+    val version: Long,
+    @get:Schema(description = "When the document was last written, as an ISO-8601 instant.")
+    val updatedAt: String,
+    @get:Schema(description = "Who last wrote the document, if the writer recorded it.")
+    val updatedBy: String?,
+)
+
+@Schema(
     name = "ConfigSnapshot",
     description = "Every document a caller should hold, at one version.",
 )

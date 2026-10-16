@@ -54,8 +54,8 @@ constructor(
         return toChangedSnapshotResponse(snapshot.version, snapshot.documents)
     }
 
-    fun getDocument(request: GetDocumentRequest) =
-        ConfigDocumentLookup.getDocumentResponse(
+    fun getDocument(request: GetDocumentRequest): ConfigDocument =
+        ConfigDocumentLookup.findDocument(
             documentRepository,
             ConfigRequestContexts.toDocumentContext(
                 request.app,
