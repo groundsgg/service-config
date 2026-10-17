@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/groundsgg/service-config/compare/v1.3.0...v1.4.0) (2026-10-17)
+
+
+### Features
+
+* **db:** run Flyway on a direct migrations datasource ([#88](https://github.com/groundsgg/service-config/issues/88)) ([0c84ffe](https://github.com/groundsgg/service-config/commit/0c84ffe1e28b19ecc067c1446851a59fc40e2398))
+
+
+### Bug Fixes
+
+* **build:** resolve dependencies through the runner mirror in Docker builds ([#84](https://github.com/groundsgg/service-config/issues/84)) ([dd8e743](https://github.com/groundsgg/service-config/commit/dd8e74374f0e49b363b85f6c341b75a08c58c356))
+
 ## [1.3.0](https://github.com/groundsgg/service-config/compare/v1.2.0...v1.3.0) (2026-10-16)
 
 
