@@ -1,7 +1,7 @@
 plugins {
     id("gg.grounds.root") version "0.1.1"
     id("gg.grounds.push") version "0.13.0"
-    id("io.quarkus") version "3.40.0"
+    alias(libs.plugins.quarkus)
 }
 
 repositories {
@@ -41,7 +41,7 @@ tasks.register<Copy>("generateOpenApiSnapshot") {
 }
 
 dependencies {
-    implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.39.5"))
+    implementation(enforcedPlatform(libs.quarkus.bom))
     implementation("io.quarkus:quarkus-arc")
     // The public API. HTTP is the only transport now.
     implementation("io.quarkus:quarkus-rest")
