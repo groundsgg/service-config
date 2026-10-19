@@ -16,14 +16,15 @@ import org.jboss.logging.Logger
  * "be admin for this one write" is not available.
  *
  * So writers are named explicitly, by the deployment, as `<subject-suffix>=<app>` or for a
- * least-privilege document owner, `<subject-suffix>=<app>/<env>/<namespace>/<configKey>`:
+ * least-privilege document owner, `<subject-suffix>=<app>/<env>/<namespace>/<configKey>`. One
+ * service account may hold several grants by joining them with `|` on the right-hand side:
  * ```
- * GROUNDS_CONFIG_WRITERS=":velocity=velocity,:velocity-2=velocity"
+ * GROUNDS_CONFIG_WRITERS=":grounds-forge-api=network/stage/resourcepacks/global|velocity/stage/motd/active"
  * ```
  *
- * Both proxies may write the `velocity` app and nothing else. Two entries rather than one because
- * the two releases run under two ServiceAccounts and share one document — which is the point of the
- * mapping being subject→app rather than subject→itself.
+ * The same ServiceAccount may own several exact documents without gaining access to their
+ * neighboring app, environment, namespace, or key. Separate ServiceAccounts still use separate
+ * comma-delimited entries.
  *
  * Suffix matching, and so namespace-agnostic, exactly like [AuthGuard]: the same deployment exists
  * in every region, and pinning the namespace would mean an entry per region that nobody would keep
@@ -35,8 +36,8 @@ class ConfigWritePolicy(
     private val configured: String
 ) {
 
-    /** Subject suffix → the app or exact document it may write. */
-    private val writers: Map<String, Grant> by lazy { parse(configured) }
+    /** Subject suffix → the apps or exact documents it may write. */
+    private val writers: Map<String, List<Grant>> by lazy { parse(configured) }
 
     /**
      * May [subject] write [app]? Admins may write anything; a scoped writer only the app it was
@@ -51,25 +52,28 @@ class ConfigWritePolicy(
      */
     fun mayWriteAs(subject: String, document: ConfigRequestContexts.DocumentContext): Boolean =
         AuthGuard.isAdminSubject(subject) ||
-            writers.any { (suffix, grant) ->
+            writers.any { (suffix, grants) ->
                 subject.endsWith(suffix) &&
-                    when (grant) {
-                        is Grant.App -> grant.app == document.app
-                        is Grant.Document -> grant.document == document
+                    grants.any { grant ->
+                        when (grant) {
+                            is Grant.App -> grant.app == document.app
+                            is Grant.Document -> grant.document == document
+                        }
                     }
             }
 
     /** Visible for testing. */
     internal fun mayWrite(subject: String, app: String): Boolean =
-        writers.any { (suffix, grant) ->
-            subject.endsWith(suffix) && grant is Grant.App && grant.app == app
+        writers.any { (suffix, grants) ->
+            subject.endsWith(suffix) &&
+                grants.any { grant -> grant is Grant.App && grant.app == app }
         }
 
     /** Visible for testing. */
     internal fun writerCount(): Int = writers.size
 
-    private fun parse(raw: String): Map<String, Grant> {
-        val parsed = mutableMapOf<String, Grant>()
+    private fun parse(raw: String): Map<String, List<Grant>> {
+        val parsed = mutableMapOf<String, List<Grant>>()
         raw.split(',')
             .map { it.trim() }
             .filter { it.isNotEmpty() }
@@ -86,16 +90,16 @@ class ConfigWritePolicy(
                     )
                     return@forEach
                 }
-                val grant =
-                    parseGrant(allowed)
+                val grants =
+                    parseGrants(allowed)
                         ?: run {
                             LOG.warnf(
-                                "Ignoring config writer entry '%s' — expected <subject-suffix>=<app> or <subject-suffix>=<app>/<env>/<namespace>/<configKey>",
+                                "Ignoring config writer entry '%s' — expected one or more | separated <app> or <app>/<env>/<namespace>/<configKey> grants",
                                 entry,
                             )
                             return@forEach
                         }
-                parsed.put(suffix, grant)?.let {
+                parsed.put(suffix, grants)?.let {
                     LOG.warnf("Config writer '%s' listed twice; keeping last valid grant", suffix)
                 }
             }
@@ -124,6 +128,17 @@ class ConfigWritePolicy(
                 }
             else -> null
         }
+    }
+
+    /**
+     * A malformed grant rejects its entire pipe-delimited list, so a typo can never broaden access.
+     */
+    private fun parseGrants(allowed: String): List<Grant>? {
+        val grants =
+            allowed.split('|').map { grant ->
+                grant.trim().takeIf { it.isNotEmpty() }?.let(::parseGrant)
+            }
+        return grants.takeIf { it.none { grant -> grant == null } }?.filterNotNull()
     }
 
     private sealed interface Grant {

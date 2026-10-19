@@ -37,11 +37,10 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag
 /**
  * Editing config documents, and browsing them across apps.
  *
- * Two different grants, on purpose. Browsing and creating are admin-only: seeing every app's
- * configuration is an operator's job, and *which* documents exist in an app is a shape decision.
- * Replacing and deleting one document additionally accept a writer named for that app or exact
- * document — which lets a service own one document without being handed every other app's
- * configuration along with it.
+ * Browsing is admin-only because seeing every app's configuration is an operator's job. Creating,
+ * replacing, and deleting one document also accept a writer named for that app or exact document,
+ * which lets a service atomically create the document it owns without being handed every other
+ * app's configuration along with it.
  *
  * The decisions themselves live in [AuthGuard] and [ConfigWritePolicy], taking the subject this
  * resource reads off the request; the gRPC facade asks the same functions through a gRPC Context.
@@ -131,8 +130,8 @@ constructor(
     @Operation(
         summary = "Create a document that does not exist yet",
         description =
-            "Admin only — which documents an app has is a shape decision. A service that wants " +
-                "create-or-replace wants PUT instead.",
+            "Admin, an app writer, or an exact-document writer. This atomically creates only when " +
+                "the document is absent; an existing document is never replaced.",
     )
     @APIResponse(responseCode = "409", description = "The document already exists.")
     fun create(
@@ -142,15 +141,22 @@ constructor(
         body: CreateDocumentBody?,
         @Context security: SecurityContext,
     ): WriteResultResponse {
-        requireAdmin(security, "create document")
         val payload = body ?: throw InvalidRequestException("A request body is required.")
+        val context =
+            ConfigRequestContexts.toDocumentContext(
+                required(app, "app"),
+                required(env, "env"),
+                required(namespace, "namespace"),
+                required(payload.configKey, "configKey"),
+            )
+        requireWrite(security, context, "create document")
         val response =
             service.createDocument(
                 CreateDocumentRequest.newBuilder()
-                    .setApp(required(app, "app"))
-                    .setEnv(required(env, "env"))
-                    .setNamespace(required(namespace, "namespace"))
-                    .setConfigKey(required(payload.configKey, "configKey"))
+                    .setApp(context.app)
+                    .setEnv(context.env)
+                    .setNamespace(context.namespace)
+                    .setConfigKey(context.configKey)
                     .setContentJson(required(payload.contentJson, "contentJson"))
                     .setUpdatedBy(payload.updatedBy ?: subjectOf(security))
                     .build()

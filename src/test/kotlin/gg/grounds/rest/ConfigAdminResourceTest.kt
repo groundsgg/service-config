@@ -5,6 +5,7 @@ import gg.grounds.api.ConfigAdminDocumentService
 import gg.grounds.auth.ConfigWritePolicy
 import gg.grounds.events.ConfigChangePublisher
 import gg.grounds.grpc.config.ConfigDocument
+import gg.grounds.grpc.config.CreateDocumentResponse
 import gg.grounds.grpc.config.DeleteDocumentResponse
 import gg.grounds.grpc.config.GetDocumentResponse
 import gg.grounds.persistence.ConfigDocumentRepository
@@ -75,6 +76,64 @@ class ConfigAdminResourceTest {
                     assertEquals("global", it.configKey)
                 }
             )
+    }
+
+    @Test
+    fun `exact writer creates its configured document with normalized identity`() {
+        whenever(service.createDocument(any()))
+            .thenReturn(CreateDocumentResponse.newBuilder().setVersion(7).build())
+
+        val result =
+            resource.create(
+                " network ",
+                " stage ",
+                " resourcepacks ",
+                CreateDocumentBody(" global ", "{}"),
+                forge,
+            )
+
+        assertEquals(7, result.version)
+        verify(service)
+            .createDocument(
+                org.mockito.kotlin.check {
+                    assertEquals("network", it.app)
+                    assertEquals("stage", it.env)
+                    assertEquals("resourcepacks", it.namespace)
+                    assertEquals("global", it.configKey)
+                }
+            )
+    }
+
+    @Test
+    fun `exact writer cannot create a neighboring document`() {
+        assertThrows(ForbiddenException::class.java) {
+            resource.create(
+                "network",
+                "stage",
+                "resourcepacks",
+                CreateDocumentBody("neighbor", "{}"),
+                forge,
+            )
+        }
+
+        verifyNoInteractions(service)
+    }
+
+    @Test
+    fun `exact writer cannot create outside the configured app environment namespace or key`() {
+        listOf(
+                arrayOf("other", "stage", "resourcepacks", "global"),
+                arrayOf("network", "prod", "resourcepacks", "global"),
+                arrayOf("network", "stage", "other", "global"),
+                arrayOf("network", "stage", "resourcepacks", "other"),
+            )
+            .forEach { (app, env, namespace, configKey) ->
+                assertThrows(ForbiddenException::class.java) {
+                    resource.create(app, env, namespace, CreateDocumentBody(configKey, "{}"), forge)
+                }
+            }
+
+        verifyNoInteractions(service)
     }
 
     @Test

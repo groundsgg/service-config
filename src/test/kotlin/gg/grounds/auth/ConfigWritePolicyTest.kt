@@ -173,4 +173,145 @@ class ConfigWritePolicyTest {
             )
         )
     }
+
+    @Test
+    fun `one service account may hold multiple exact document grants`() {
+        val policy =
+            ConfigWritePolicy(
+                ":grounds-forge-api=network/stage/resourcepacks/global|velocity/stage/motd/active|velocity/stage/maintenance/active"
+            )
+
+        listOf(
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
+                ConfigRequestContexts.toDocumentContext("velocity", "stage", "motd", "active"),
+                ConfigRequestContexts.toDocumentContext(
+                    "velocity",
+                    "stage",
+                    "maintenance",
+                    "active",
+                ),
+            )
+            .forEach { document ->
+                assertTrue(
+                    policy.mayWriteAs("system:serviceaccount:games:grounds-forge-api", document)
+                )
+            }
+    }
+
+    @Test
+    fun `multiple exact grants deny neighboring app env namespace and key`() {
+        val policy =
+            ConfigWritePolicy(
+                ":grounds-forge-api=network/stage/resourcepacks/global|velocity/stage/motd/active|velocity/stage/maintenance/active"
+            )
+
+        listOf(
+                ConfigRequestContexts.toDocumentContext(
+                    "other",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "prod",
+                    "resourcepacks",
+                    "global",
+                ),
+                ConfigRequestContexts.toDocumentContext("network", "stage", "other", "global"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "other",
+                ),
+            )
+            .forEach { document ->
+                assertFalse(
+                    policy.mayWriteAs("system:serviceaccount:games:grounds-forge-api", document)
+                )
+            }
+    }
+
+    @Test
+    fun `malformed grant in a pipe list rejects that complete writer entry`() {
+        val policy =
+            ConfigWritePolicy(
+                ":grounds-forge-api=network/stage/resourcepacks/global|network/stage|velocity/stage/motd/active"
+            )
+
+        assertEquals(0, policy.writerCount())
+        assertFalse(
+            policy.mayWriteAs(
+                "system:serviceaccount:games:grounds-forge-api",
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
+            )
+        )
+    }
+
+    @Test
+    fun `last valid duplicate replaces all previous pipe grants`() {
+        val policy =
+            ConfigWritePolicy(
+                ":grounds-forge-api=network/stage/resourcepacks/global|velocity/stage/motd/active," +
+                    ":grounds-forge-api=velocity/stage/maintenance/active"
+            )
+
+        assertFalse(
+            policy.mayWriteAs(
+                "system:serviceaccount:games:grounds-forge-api",
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
+            )
+        )
+        assertTrue(
+            policy.mayWriteAs(
+                "system:serviceaccount:games:grounds-forge-api",
+                ConfigRequestContexts.toDocumentContext(
+                    "velocity",
+                    "stage",
+                    "maintenance",
+                    "active",
+                ),
+            )
+        )
+    }
+
+    @Test
+    fun `app grants retain app wide document access when mixed with exact pipe grants`() {
+        val policy =
+            ConfigWritePolicy(":grounds-forge-api=velocity|network/stage/resourcepacks/global")
+
+        assertTrue(
+            policy.mayWriteAs(
+                "system:serviceaccount:games:grounds-forge-api",
+                ConfigRequestContexts.toDocumentContext("velocity", "prod", "anything", "else"),
+            )
+        )
+        assertFalse(
+            policy.mayWriteAs(
+                "system:serviceaccount:games:grounds-forge-api",
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "other",
+                ),
+            )
+        )
+    }
 }

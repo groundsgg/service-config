@@ -22,9 +22,9 @@ import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme
                     "Changes are also announced on NATS, so a service learns that its " +
                     "configuration moved without polling for it. The event carries the version, " +
                     "not the documents — the reader comes back here for those.\n\n" +
-                    "Reading is open to any authenticated workload. Writing is not: browsing and " +
-                    "creating are admin-only, while replacing and deleting one app's documents " +
-                    "can be granted to that app's own ServiceAccount.",
+                    "Reading is open to any authenticated workload. Browsing is admin-only, while " +
+                    "creating, replacing, and deleting one app's documents can be granted to that " +
+                    "app's own ServiceAccount.",
         )
 )
 @SecurityScheme(
