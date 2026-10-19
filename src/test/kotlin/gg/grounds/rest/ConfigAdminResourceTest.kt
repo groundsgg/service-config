@@ -129,13 +129,7 @@ class ConfigAdminResourceTest {
             )
             .forEach { (app, env, namespace, configKey) ->
                 assertThrows(ForbiddenException::class.java) {
-                    resource.create(
-                        app,
-                        env,
-                        namespace,
-                        CreateDocumentBody(configKey, "{}"),
-                        forge,
-                    )
+                    resource.create(app, env, namespace, CreateDocumentBody(configKey, "{}"), forge)
                 }
             }
 

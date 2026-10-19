@@ -65,7 +65,8 @@ class ConfigWritePolicy(
     /** Visible for testing. */
     internal fun mayWrite(subject: String, app: String): Boolean =
         writers.any { (suffix, grants) ->
-            subject.endsWith(suffix) && grants.any { grant -> grant is Grant.App && grant.app == app }
+            subject.endsWith(suffix) &&
+                grants.any { grant -> grant is Grant.App && grant.app == app }
         }
 
     /** Visible for testing. */
@@ -129,7 +130,9 @@ class ConfigWritePolicy(
         }
     }
 
-    /** A malformed grant rejects its entire pipe-delimited list, so a typo can never broaden access. */
+    /**
+     * A malformed grant rejects its entire pipe-delimited list, so a typo can never broaden access.
+     */
     private fun parseGrants(allowed: String): List<Grant>? {
         val grants =
             allowed.split('|').map { grant ->

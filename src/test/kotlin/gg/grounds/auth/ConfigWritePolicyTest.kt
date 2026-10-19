@@ -182,16 +182,23 @@ class ConfigWritePolicyTest {
             )
 
         listOf(
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
                 ConfigRequestContexts.toDocumentContext("velocity", "stage", "motd", "active"),
-                ConfigRequestContexts.toDocumentContext("velocity", "stage", "maintenance", "active"),
+                ConfigRequestContexts.toDocumentContext(
+                    "velocity",
+                    "stage",
+                    "maintenance",
+                    "active",
+                ),
             )
             .forEach { document ->
                 assertTrue(
-                    policy.mayWriteAs(
-                        "system:serviceaccount:games:grounds-forge-api",
-                        document,
-                    )
+                    policy.mayWriteAs("system:serviceaccount:games:grounds-forge-api", document)
                 )
             }
     }
@@ -204,17 +211,29 @@ class ConfigWritePolicyTest {
             )
 
         listOf(
-                ConfigRequestContexts.toDocumentContext("other", "stage", "resourcepacks", "global"),
-                ConfigRequestContexts.toDocumentContext("network", "prod", "resourcepacks", "global"),
+                ConfigRequestContexts.toDocumentContext(
+                    "other",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "prod",
+                    "resourcepacks",
+                    "global",
+                ),
                 ConfigRequestContexts.toDocumentContext("network", "stage", "other", "global"),
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "other"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "other",
+                ),
             )
             .forEach { document ->
                 assertFalse(
-                    policy.mayWriteAs(
-                        "system:serviceaccount:games:grounds-forge-api",
-                        document,
-                    )
+                    policy.mayWriteAs("system:serviceaccount:games:grounds-forge-api", document)
                 )
             }
     }
@@ -230,7 +249,12 @@ class ConfigWritePolicyTest {
         assertFalse(
             policy.mayWriteAs(
                 "system:serviceaccount:games:grounds-forge-api",
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
             )
         )
     }
@@ -246,13 +270,23 @@ class ConfigWritePolicyTest {
         assertFalse(
             policy.mayWriteAs(
                 "system:serviceaccount:games:grounds-forge-api",
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "global"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "global",
+                ),
             )
         )
         assertTrue(
             policy.mayWriteAs(
                 "system:serviceaccount:games:grounds-forge-api",
-                ConfigRequestContexts.toDocumentContext("velocity", "stage", "maintenance", "active"),
+                ConfigRequestContexts.toDocumentContext(
+                    "velocity",
+                    "stage",
+                    "maintenance",
+                    "active",
+                ),
             )
         )
     }
@@ -260,9 +294,7 @@ class ConfigWritePolicyTest {
     @Test
     fun `app grants retain app wide document access when mixed with exact pipe grants`() {
         val policy =
-            ConfigWritePolicy(
-                ":grounds-forge-api=velocity|network/stage/resourcepacks/global"
-            )
+            ConfigWritePolicy(":grounds-forge-api=velocity|network/stage/resourcepacks/global")
 
         assertTrue(
             policy.mayWriteAs(
@@ -273,7 +305,12 @@ class ConfigWritePolicyTest {
         assertFalse(
             policy.mayWriteAs(
                 "system:serviceaccount:games:grounds-forge-api",
-                ConfigRequestContexts.toDocumentContext("network", "stage", "resourcepacks", "other"),
+                ConfigRequestContexts.toDocumentContext(
+                    "network",
+                    "stage",
+                    "resourcepacks",
+                    "other",
+                ),
             )
         )
     }
