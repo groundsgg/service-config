@@ -58,19 +58,25 @@ Authorization on top of that:
 | API | who |
 |---|---|
 | `ConfigService` (reads, `SyncDefaults`) | any authenticated caller |
-| `ConfigAdminService.ListDocuments` / `GetDocument` / `CreateDocument` | admins only |
-| `ConfigAdminService.PutDocument` / `DeleteDocument` | admins, **plus** a writer named for that app or exact document |
+| `ConfigAdminService.ListDocuments` / `GetDocument` | admins only |
+| `ConfigAdminService.CreateDocument` / `PutDocument` / `DeleteDocument` | admins, **plus** a writer named for that app or exact document |
 
 An admin is a caller whose JWT `sub` ends in `:platform-admin` or `:config-admin` — ops creates
 those ServiceAccounts by hand, and their existence is the grant (`AuthGuard`).
 
-`GROUNDS_CONFIG_WRITERS` names callers that may replace or delete documents without being admins.
+`GROUNDS_CONFIG_WRITERS` names callers that may create, replace, or delete documents without being admins.
 The legacy `<subject-suffix>=<app>` grant authorizes every document in that app; prefer the
 least-privilege exact form `<subject-suffix>=<app>/<env>/<namespace>/<configKey>` for a service
 that owns one document:
 
 ```
 GROUNDS_CONFIG_WRITERS=":forge=network/stage/resourcepacks/global"
+```
+
+Separate multiple grants for the same ServiceAccount with `|` on the right-hand side:
+
+```
+GROUNDS_CONFIG_WRITERS=":grounds-forge-api=network/stage/resourcepacks/global|velocity/stage/motd/active|velocity/stage/maintenance/active"
 ```
 
 This is how a service owns its own configuration without being handed every other app's or document
@@ -80,11 +86,12 @@ and that grants far more than one document.
 
 Subject suffix matching is namespace-agnostic, deliberately and exactly like the admin rule: the
 same deployment exists in every region. The exact grant itself pins app, environment, namespace and
-key. Malformed grants are ignored rather than becoming broader app grants.
+key. A malformed grant, including one malformed item in a pipe list, is ignored rather than
+becoming a broader app grant.
 
-Unset (the default) means admin-only. Creating stays admin-only in every case: which documents exist
-in an app is a shape decision, and `PutDocument` is already the create-or-replace path a
-self-configuring service needs.
+Unset (the default) means admin-only. `CreateDocument` remains atomic: it creates only if absent,
+and reports a conflict without overwriting an existing document. This lets a scoped service safely
+create its own initial document without unconditional replacement.
 
 Single-document reads and successful PUTs return a strong `ETag` containing the document version.
 PUT accepts that value in `If-Match` only as one quoted, canonical positive signed-Int64 value (for
