@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/groundsgg/service-config/compare/v1.4.0...v1.5.0) (2026-10-19)
+
+
+### Features
+
+* **config:** support scoped atomic document creation ([#89](https://github.com/groundsgg/service-config/issues/89)) ([5bac295](https://github.com/groundsgg/service-config/commit/5bac295dce93b32db7bee7d2f3c3a82eb97525ac))
+
 ## [1.4.0](https://github.com/groundsgg/service-config/compare/v1.3.0...v1.4.0) (2026-10-17)
 
 
