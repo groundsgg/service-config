@@ -1,0 +1,26 @@
+{
+  "quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25": {
+    "digest": "sha256:6e0fe1ddc9efcf8dc1775c3016974db8d07124f805ba963495ec2bddb2d47349"
+  },
+  "quay.io/quarkus/ubi9-quarkus-micro-image:2.0": {
+    "digest": "sha256:267cda98b29406502c9b73e993f7a0e17cbb718c077c834e72bbf60be8af52ff"
+  },
+  "gcr.io/distroless/cc-debian13:nonroot": {
+    "digest": "sha256:08476c244888bfb425bae1ae4dd7c17f093e972aab8426883d97f3c6f280f7c1"
+  },
+  "postgres:17-alpine": {
+    "digest": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b"
+  },
+  "nats:2.11.8-alpine": {
+    "digest": "sha256:71092f77d707a4a81b12aca5096d6b2d2e07ad16aa57c84066940a17af74f61a"
+  },
+  "edoburu/pgbouncer": {
+    "digest": "sha256:8638aa563607256d3c7440437534195f1066a92b68015d89ae9d6b935b444a6d"
+  },
+  "eclipse-temurin:25-jdk": {
+    "digest": "sha256:83f4a7fc27df94dcc7b8de04d14cbbba8da14406f921e966969c3b09000aa507"
+  },
+  "gcr.io/distroless/java25-debian13:nonroot": {
+    "digest": "sha256:a90a5fadd78dc37b643da72dca2f744ef67eba625eca7227a5b375b548e6b1c2"
+  }
+}

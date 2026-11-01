@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "repetitions": 3,
+  "dataset": {
+    "documents": 100,
+    "namespaces": 10,
+    "contentBytes": 4096
+  },
+  "resources": {
+    "memoryBytes": 805306368,
+    "nanoCpus": 1000000000
+  },
+  "metricsIntervalSeconds": 15,
+  "readMix": {
+    "snapshot": 0.6,
+    "document": 0.3,
+    "namespaceSnapshot": 0.1
+  },
+  "phases": [
+    {
+      "name": "warmup",
+      "seconds": 300,
+      "readsPerSecond": 100,
+      "writesPerSecond": 5
+    },
+    {
+      "name": "idle",
+      "seconds": 600,
+      "readsPerSecond": 0,
+      "writesPerSecond": 0
+    },
+    {
+      "name": "regular",
+      "seconds": 900,
+      "readsPerSecond": 100,
+      "writesPerSecond": 5
+    },
+    {
+      "name": "burst",
+      "seconds": 300,
+      "readsPerSecond": 200,
+      "writesPerSecond": 10
+    }
+  ],
+  "gates": {
+    "nativeSavingVsJvm": 0.3,
+    "nativeSavingVsTunedJvm": 0.15,
+    "p95RelativeRegression": 0.1,
+    "p95AbsoluteAllowanceMs": 2,
+    "p99RelativeRegression": 0.2,
+    "p99AbsoluteAllowanceMs": 5,
+    "cpuRelativeRegression": 0.2,
+    "minimumAchievedRateRatio": 0.99
+  }
+}

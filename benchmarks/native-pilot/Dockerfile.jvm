@@ -1,0 +1,11 @@
+FROM gcr.io/distroless/java25-debian13:nonroot@sha256:a90a5fadd78dc37b643da72dca2f744ef67eba625eca7227a5b375b548e6b1c2
+ARG BUILD_COMMIT
+ARG BUILD_SOURCE_SHA256
+LABEL org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      gg.grounds.source-tree-sha256="${BUILD_SOURCE_SHA256}" \
+      gg.grounds.runtime="jvm"
+WORKDIR /deployments
+COPY --chown=65532:65532 *-runner.jar /deployments/service-config-runner.jar
+USER 65532:65532
+EXPOSE 9000
+ENTRYPOINT ["java", "-jar", "/deployments/service-config-runner.jar"]

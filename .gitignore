@@ -48,3 +48,4 @@ nb-configuration.xml
 
 # Codex
 .codex
+__pycache__/
