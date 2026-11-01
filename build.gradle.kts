@@ -126,19 +126,3 @@ tasks.register<Test>("runtimeTest") {
     )
     testLogging { events("passed", "failed", "skipped") }
 }
-
-tasks.register<JavaExec>("runtimeFixture") {
-    description = "Start disposable benchmark dependencies; stop by creating <manifest>.stop."
-    group = "verification"
-    dependsOn(runtimeTest.classesTaskName)
-    classpath = runtimeTest.runtimeClasspath
-    mainClass.set("gg.grounds.RuntimeFixtureMain")
-    for (name in
-        listOf(
-            "grounds.runtime.image",
-            "grounds.runtime.manifest",
-            "grounds.runtime.java-options",
-        )) {
-        providers.systemProperty(name).orNull?.let { systemProperty(name, it) }
-    }
-}
