@@ -91,3 +91,38 @@ tasks.processResources {
         filter { line: String -> line.replace("@VERSION@", projectVersion) }
     }
 }
+
+// Blackbox tests run the packaged JVM/native image, never an in-process CDI mock.
+val runtimeTest = sourceSets.create("runtimeTest")
+
+configurations[runtimeTest.implementationConfigurationName].extendsFrom(
+    configurations.testImplementation.get()
+)
+
+configurations[runtimeTest.runtimeOnlyConfigurationName].extendsFrom(
+    configurations.testRuntimeOnly.get()
+)
+
+dependencies {
+    add(runtimeTest.implementationConfigurationName, "org.testcontainers:testcontainers:2.0.5")
+}
+
+tasks.register<Test>("runtimeTest") {
+    description =
+        "Verify a packaged Config image against real HTTP, TLS, database and NATS services."
+    group = "verification"
+    testClassesDirs = runtimeTest.output.classesDirs
+    classpath = runtimeTest.runtimeClasspath
+    useJUnitPlatform()
+    maxParallelForks = 1
+    // Docker tags can be rebuilt without changing Gradle inputs. Always test real processes.
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+    systemProperty(
+        "grounds.runtime.image",
+        providers
+            .systemProperty("grounds.runtime.image")
+            .getOrElse("grounds/service-config:jvm-pilot"),
+    )
+    testLogging { events("passed", "failed", "skipped") }
+}
