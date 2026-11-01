@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/groundsgg/service-config/compare/v1.5.0...v1.6.0) (2026-11-01)
+
+
+### Features
+
+* **config:** add native runtime and reusable CI ([#93](https://github.com/groundsgg/service-config/issues/93)) ([d152e70](https://github.com/groundsgg/service-config/commit/d152e70d140e563a4c2d4a83936af5616a455c5f))
+
 ## [1.5.0](https://github.com/groundsgg/service-config/compare/v1.4.0...v1.5.0) (2026-10-19)
 
 
